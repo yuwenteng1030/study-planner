@@ -30,3 +30,6 @@ htmlcov/
 # 編輯器
 .vscode/
 .idea/
+
+# oh-my-claudecode 執行期狀態
+.omc/
