@@ -20,10 +20,7 @@ v0.1–v0.3 期間想到的新功能**一律寫進這裡，當天不做**。
 
 ## 環境待辦
 
-- [ ] **11/2 之前**：補 GitHub token 的 `workflow` 權限，否則推 `.github/workflows/` 會被拒絕
-  ```bash
-  gh auth refresh -h github.com -s workflow
-  ```
+- [x] ~~補 GitHub token 的 `workflow` 權限~~（10/13 完成，scopes 已含 `workflow`，11/2 可直接推 `.github/workflows/`）
 - [ ] 需要時再裝 Xcode Command Line Tools（`xcode-select --install`）。目前所有依賴都有 arm64 預編譯 wheel，用不到 C 編譯器
 
 ## 不做（明確拒絕，面試被問時這也是答案）
