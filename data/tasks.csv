@@ -1,0 +1,53 @@
+source,title,url,topic,prereq,difficulty,est_minutes,static_note
+HR,Find the Runner-Up Score!,https://www.hackerrank.com/challenges/find-second-maximum-number-in-a-list/problem,python_basic,,Easy,10,list 與 set 的基本操作，注意重複值
+HR,collections.Counter(),https://www.hackerrank.com/challenges/collections-counter/problem,python_basic,,Easy,15,Counter 的建立與遞減，之後雜湊題都靠它
+HR,DefaultDict Tutorial,https://www.hackerrank.com/challenges/defaultdict-tutorial/problem,python_basic,,Easy,15,defaultdict 省掉「key 不存在」的判斷
+HR,Counting Valleys,https://www.hackerrank.com/challenges/counting-valleys/problem,array_string,,Easy,15,單次掃描並維護狀態變數
+HR,Jumping on the Clouds,https://www.hackerrank.com/challenges/jumping-on-the-clouds/problem,array_string,,Easy,15,線性走訪加簡單決策，索引邊界易錯
+HR,Repeated String,https://www.hackerrank.com/challenges/repeated-string/problem,array_string,,Easy,20,用整除與餘數避開實際展開字串
+HR,2D Array - DS,https://www.hackerrank.com/challenges/2d-array/problem,array_string,,Easy,20,固定形狀的二維走訪與邊界計算
+HR,Arrays: Left Rotation,https://www.hackerrank.com/challenges/ctci-array-left-rotation/problem,array_string,,Easy,15,取模做位移，不要真的搬移元素
+HR,Sales by Match,https://www.hackerrank.com/challenges/sock-merchant/problem,hash_map,,Easy,15,用字典計數，雜湊表最基本的應用
+LC,Contains Duplicate,https://leetcode.com/problems/contains-duplicate/,hash_map,,Easy,10,用 set 換空間省時間的起點
+LC,Valid Anagram,https://leetcode.com/problems/valid-anagram/,hash_map,,Easy,15,字元計數比較，Counter 的典型題
+HR,Two Strings,https://www.hackerrank.com/challenges/two-strings/problem,hash_map,,Easy,15,轉成集合取交集，比逐字比對快
+HR,Hash Tables: Ransom Note,https://www.hackerrank.com/challenges/ctci-ransom-note/problem,hash_map,,Easy,20,計數後逐項扣減，注意大小寫敏感
+LC,Two Sum,https://leetcode.com/problems/two-sum/,hash_map,,Easy,20,邊走邊建表，把 O(n^2) 降成 O(n)
+LC,Group Anagrams,https://leetcode.com/problems/group-anagrams/,hash_map,sorting,Medium,30,設計雜湊鍵：排序後的字串當 key
+HR,Sherlock and Anagrams,https://www.hackerrank.com/challenges/sherlock-and-anagrams/problem,hash_map,,Medium,40,列舉子字串並正規化後計數
+HR,Frequency Queries,https://www.hackerrank.com/challenges/frequency-queries/problem,hash_map,,Medium,40,同時維護值的次數與次數的次數
+HR,Count Triplets,https://www.hackerrank.com/challenges/count-triplets-1/problem,hash_map,,Medium,45,左右兩個計數表夾中間，別用三層迴圈
+LC,Top K Frequent Elements,https://leetcode.com/problems/top-k-frequent-elements/,hash_map,sorting,Medium,30,計數後取前 k 名，可用桶排序避開排序
+LC,Valid Palindrome,https://leetcode.com/problems/valid-palindrome/,two_pointers,,Easy,15,頭尾雙指標配合字元過濾
+LC,Two Sum II - Input Array Is Sorted,https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/,two_pointers,,Medium,20,已排序時雙指標可取代雜湊表
+LC,Container With Most Water,https://leetcode.com/problems/container-with-most-water/,two_pointers,,Medium,30,從兩端收縮，要能證明為何可捨棄較短邊
+HR,Pairs,https://www.hackerrank.com/challenges/pairs/problem,two_pointers,hash_map,Medium,30,找固定差值的配對，集合或雙指標皆可
+LC,3Sum,https://leetcode.com/problems/3sum/,two_pointers,sorting,Medium,45,排序後固定一端，去重是主要難點
+LC,Best Time to Buy and Sell Stock,https://leetcode.com/problems/best-time-to-buy-and-sell-stock/,sliding_window,,Easy,20,維護歷史最小值的單次掃描
+LC,Longest Substring Without Repeating Characters,https://leetcode.com/problems/longest-substring-without-repeating-characters/,sliding_window,hash_map,Medium,40,可變窗口，窗口收縮條件要想清楚
+LC,Longest Repeating Character Replacement,https://leetcode.com/problems/longest-repeating-character-replacement/,sliding_window,hash_map,Medium,40,窗口內只需記住最高頻字元的次數
+LC,Permutation in String,https://leetcode.com/problems/permutation-in-string/,sliding_window,hash_map,Medium,35,固定長度窗口，比對兩個計數表
+LC,Minimum Size Subarray Sum,https://leetcode.com/problems/minimum-size-subarray-sum/,sliding_window,,Medium,30,找最短而非最長，收縮條件方向相反
+HR,Minimum Swaps 2,https://www.hackerrank.com/challenges/minimum-swaps-2/problem,sorting,,Medium,30,值與索引的對應關係，交換到位即可
+LC,Merge Sorted Array,https://leetcode.com/problems/merge-sorted-array/,sorting,two_pointers,Easy,20,從尾端往前填，避免覆蓋未處理元素
+LC,Sort Colors,https://leetcode.com/problems/sort-colors/,sorting,two_pointers,Medium,30,三路劃分，一次掃描完成
+HR,Fraudulent Activity Notifications,https://www.hackerrank.com/challenges/fraudulent-activity-notifications/problem,sorting,,Medium,45,滑動中位數，用計數排序維護視窗
+HR,Mark and Toys,https://www.hackerrank.com/challenges/mark-and-toys/problem,greedy,sorting,Easy,20,排序後取最便宜，要能說明為何最佳
+HR,Max Min,https://www.hackerrank.com/challenges/angry-children/problem,greedy,sorting,Medium,30,排序後取連續 k 個，窗口最小差
+HR,Greedy Florist,https://www.hackerrank.com/challenges/greedy-florist/problem,greedy,sorting,Medium,35,由貴到便宜分配，貪婪順序決定答案
+LC,Jump Game,https://leetcode.com/problems/jump-game/,greedy,,Medium,30,維護能到達的最遠位置即可
+LC,Merge Intervals,https://leetcode.com/problems/merge-intervals/,intervals,sorting,Medium,30,依起點排序後合併重疊
+LC,Insert Interval,https://leetcode.com/problems/insert-interval/,intervals,,Medium,30,分成三段處理，邊界條件最容易錯
+LC,Non-overlapping Intervals,https://leetcode.com/problems/non-overlapping-intervals/,intervals,greedy,Medium,35,依結束點排序的貪婪，和依起點排序的差別
+LC,Product of Array Except Self,https://leetcode.com/problems/product-of-array-except-self/,prefix_sum,,Medium,30,左右兩次前綴乘積，不能用除法
+LC,Subarray Sum Equals K,https://leetcode.com/problems/subarray-sum-equals-k/,prefix_sum,hash_map,Medium,40,前綴和配雜湊表，注意前綴 0 要先放進表
+HR,Array Manipulation,https://www.hackerrank.com/challenges/crush/problem,prefix_sum,,Hard,60,差分陣列，區間加值只改兩端
+LC,Valid Parentheses,https://leetcode.com/problems/valid-parentheses/,stack,,Easy,15,堆疊入門，注意配對與空堆疊邊界
+HR,Equal Stacks,https://www.hackerrank.com/challenges/equal-stacks/problem,stack,prefix_sum,Easy,25,先算前綴高度，再同步往下退
+LC,Min Stack,https://leetcode.com/problems/min-stack/,stack,,Medium,25,用輔助堆疊讓取最小值變成 O(1)
+HR,Balanced Brackets,https://www.hackerrank.com/challenges/balanced-brackets/problem,stack,,Medium,25,多種括號配對，型別也要相符
+LC,Daily Temperatures,https://leetcode.com/problems/daily-temperatures/,stack,,Medium,35,單調遞減堆疊，存索引不存值
+HR,Largest Rectangle,https://www.hackerrank.com/challenges/largest-rectangle/problem,stack,,Medium,50,單調堆疊進階，邊界哨兵的處理
+HR,Min Max Riddle,https://www.hackerrank.com/challenges/min-max-riddle/problem,stack,,Medium,55,每個元素當最小值的最大區間長度
+HR,Queues: A Tale of Two Stacks,https://www.hackerrank.com/challenges/ctci-queue-using-two-stacks/problem,queue,stack,Medium,30,兩個堆疊模擬佇列，攤還複雜度
+LC,Implement Queue using Stacks,https://leetcode.com/problems/implement-queue-using-stacks/,queue,stack,Easy,25,和上一題同構，但要寫成類別介面
