@@ -1,0 +1,16 @@
+# v0.1
+streamlit
+sqlalchemy
+pydantic
+anthropic
+pyyaml
+pandas
+python-dotenv
+
+# v0.2
+fastapi
+uvicorn
+httpx
+
+# 開發
+pytest
