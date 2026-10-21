@@ -1,0 +1,24 @@
+# 版本一律釘死。
+#
+# 不釘的話每次 pip install 都可能裝到不同版本：別人（以及未來的我）跑不出
+# 一樣的結果，而且上游某個版本被下毒時會默默裝進來。
+# 版本號取自實際跑得起來的環境（pip freeze）。
+#
+# 升級時一次升一個，升完跑 pytest。
+
+# v0.1
+streamlit==1.66.0
+SQLAlchemy==2.1.5
+pydantic==2.14.1
+anthropic==1.17.0
+PyYAML==6.0.3
+pandas==3.0.6
+python-dotenv==1.2.4
+
+# v0.2
+fastapi==0.156.6
+uvicorn==0.54.0
+httpx==0.28.1
+
+# 開發
+pytest==9.1.1

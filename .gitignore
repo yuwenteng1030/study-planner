@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 測試與快取
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# 環境變數：API key 絕對不能進版控
+.env
+.env.*
+!.env.example
+
+# 資料庫
+*.db
+*.sqlite
+*.sqlite3
+
+# LLM 快取
+.cache/
+
+# macOS
+.DS_Store
+
+# 編輯器
+.vscode/
+.idea/
+
+# oh-my-claudecode 執行期狀態
+.omc/

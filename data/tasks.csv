@@ -1,0 +1,45 @@
+source,title,url,topic,prereq,difficulty,est_minutes,static_note
+HR,Find the Runner-Up Score!,https://www.hackerrank.com/challenges/find-second-maximum-number-in-a-list/problem,python_basic,,Easy,10,list 與 set 的基本操作，注意重複值
+HR,collections.Counter(),https://www.hackerrank.com/challenges/collections-counter/problem,python_basic,,Easy,15,Counter 的建立與遞減，之後雜湊題都靠它
+HR,DefaultDict Tutorial,https://www.hackerrank.com/challenges/defaultdict-tutorial/problem,python_basic,,Easy,15,defaultdict 省掉「key 不存在」的判斷
+HR,Counting Valleys,https://www.hackerrank.com/challenges/counting-valleys/problem,arrays,,Easy,15,單次掃描並維護狀態變數
+HR,Jumping on the Clouds,https://www.hackerrank.com/challenges/jumping-on-the-clouds/problem,arrays,,Easy,15,線性走訪加簡單決策，索引邊界易錯
+HR,Repeated String,https://www.hackerrank.com/challenges/repeated-string/problem,arrays,,Easy,20,用整除與餘數避開實際展開字串
+HR,Arrays: Left Rotation,https://www.hackerrank.com/challenges/ctci-array-left-rotation/problem,arrays,,Easy,15,取模做位移，不要真的搬移元素
+HR,2D Array - DS,https://www.hackerrank.com/challenges/2d-array/problem,arrays,,Easy,20,固定形狀的二維走訪與邊界計算
+HR,Subarray Division,https://www.hackerrank.com/challenges/the-birthday-bar/problem,arrays,,Easy,15,固定長度窗口，進一個出一個更新總和
+HR,Sparse Arrays,https://www.hackerrank.com/challenges/sparse-arrays/problem,arrays,,Medium,25,先建計數表再查詢（Counter）；不要每次重掃
+HR,Array Manipulation,https://www.hackerrank.com/challenges/crush/problem,arrays,,Hard,60,差分陣列，區間加值只改兩端
+HR,Sales by Match,https://www.hackerrank.com/challenges/sock-merchant/problem,hashmaps,,Easy,15,用字典計數，雜湊表最基本的應用
+HR,Hash Tables: Ransom Note,https://www.hackerrank.com/challenges/ctci-ransom-note/problem,hashmaps,,Easy,20,計數後逐項扣減，注意大小寫敏感
+HR,Picking Numbers,https://www.hackerrank.com/challenges/picking-numbers/problem,hashmaps,,Easy,20,相鄰兩個值的計數相加取最大
+HR,Frequency Queries,https://www.hackerrank.com/challenges/frequency-queries/problem,hashmaps,,Medium,40,同時維護值的次數與次數的次數
+HR,Count Triplets,https://www.hackerrank.com/challenges/count-triplets-1/problem,hashmaps,,Medium,45,左右兩個計數表夾中間，別用三層迴圈
+HR,Two Strings,https://www.hackerrank.com/challenges/two-strings/problem,strings,hashmaps,Easy,15,轉成集合取交集，比逐字比對快
+HR,Palindrome Index,https://www.hackerrank.com/challenges/palindrome-index/problem,strings,,Easy,20,頭尾雙指標，第一次不相等就是候選
+HR,Anagram,https://www.hackerrank.com/challenges/anagram/problem,strings,hashmaps,Easy,20,對半切後比對計數差，奇數長度直接 -1
+HR,Strings: Making Anagrams,https://www.hackerrank.com/challenges/ctci-making-anagrams/problem,strings,hashmaps,Easy,20,兩邊計數相減的絕對值總和
+HR,Sherlock and the Valid String,https://www.hackerrank.com/challenges/sherlock-and-valid-string/problem,strings,hashmaps,Medium,35,次數的次數，只允許一個異常值
+HR,Sherlock and Anagrams,https://www.hackerrank.com/challenges/sherlock-and-anagrams/problem,strings,hashmaps,Medium,40,列舉子字串並正規化後計數
+HR,Big Sorting,https://www.hackerrank.com/challenges/big-sorting/problem,sorting,,Easy,15,字串數字要按數值排，先比長度再比字典序
+HR,Minimum Absolute Difference in an Array,https://www.hackerrank.com/challenges/minimum-absolute-difference-in-an-array/problem,sorting,,Easy,15,排序後只需比相鄰兩項
+HR,Closest Numbers,https://www.hackerrank.com/challenges/closest-numbers/problem,sorting,,Easy,20,排序後掃一次，同時收集所有最小差配對
+HR,Minimum Swaps 2,https://www.hackerrank.com/challenges/minimum-swaps-2/problem,sorting,,Medium,30,值與索引的對應關係，交換到位即可
+HR,Fraudulent Activity Notifications,https://www.hackerrank.com/challenges/fraudulent-activity-notifications/problem,sorting,,Medium,45,滑動中位數，用計數排序維護視窗
+HR,Mark and Toys,https://www.hackerrank.com/challenges/mark-and-toys/problem,greedy,sorting,Easy,20,排序後取最便宜，要能說明為何最佳
+HR,Luck Balance,https://www.hackerrank.com/challenges/luck-balance/problem,greedy,sorting,Easy,20,可放棄的項目排序後取前 k 大
+HR,Priyanka and Toys,https://www.hackerrank.com/challenges/priyanka-and-toys/problem,greedy,sorting,Easy,20,排序後以最小值開新容器，區間覆蓋
+HR,Max Min,https://www.hackerrank.com/challenges/angry-children/problem,greedy,sorting,Medium,30,排序後取連續 k 個，窗口最小差
+HR,Greedy Florist,https://www.hackerrank.com/challenges/greedy-florist/problem,greedy,sorting,Medium,35,由貴到便宜分配，貪婪順序決定答案
+HR,Ice Cream Parlor,https://www.hackerrank.com/challenges/icecream-parlor/problem,search,hashmaps,Easy,20,找兩數和等於目標，邊走邊建表
+HR,Pairs,https://www.hackerrank.com/challenges/pairs/problem,search,sorting,Medium,30,找固定差值的配對，集合或雙指標皆可
+HR,Maximum Element,https://www.hackerrank.com/challenges/maximum-element/problem,stacks_queues,,Easy,20,輔助堆疊同步記錄當前最大值
+HR,Equal Stacks,https://www.hackerrank.com/challenges/equal-stacks/problem,stacks_queues,arrays,Easy,25,先算前綴高度，再同步往下退
+HR,Balanced Brackets,https://www.hackerrank.com/challenges/balanced-brackets/problem,stacks_queues,,Medium,25,多種括號配對，型別也要相符
+HR,Queues: A Tale of Two Stacks,https://www.hackerrank.com/challenges/ctci-queue-using-two-stacks/problem,stacks_queues,,Medium,30,兩個堆疊模擬佇列，攤還複雜度
+HR,Simple Text Editor,https://www.hackerrank.com/challenges/simple-text-editor/problem,stacks_queues,,Medium,40,用堆疊存操作紀錄來實作 undo
+HR,Castle on the Grid,https://www.hackerrank.com/challenges/castle-on-the-grid/problem,stacks_queues,,Medium,45,BFS 用佇列，一次滑到底才算一步
+HR,Largest Rectangle,https://www.hackerrank.com/challenges/largest-rectangle/problem,stacks_queues,,Medium,50,單調堆疊進階，邊界哨兵的處理
+HR,Min Max Riddle,https://www.hackerrank.com/challenges/min-max-riddle/problem,stacks_queues,,Medium,55,每個元素當最小值的最大區間長度
+HR,Truck Tour,https://www.hackerrank.com/challenges/truck-tour/problem,stacks_queues,arrays,Hard,50,環狀起點問題，前綴和轉折點即答案
+HR,Poisonous Plants,https://www.hackerrank.com/challenges/poisonous-plants/problem,stacks_queues,,Hard,60,堆疊內記錄存活天數，單調性是關鍵

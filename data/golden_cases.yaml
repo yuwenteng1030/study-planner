@@ -1,0 +1,95 @@
+# 黃金案例：評分邏輯的迴歸測試。
+#
+# 每次改 core/scoring.py 就跑一次 `pytest tests/test_scoring.py`，
+# 確認沒有把原本合理的排序改壞。面試官問「你怎麼知道推薦是對的」，
+# 答案就是這份檔案——它把「什麼叫合理」寫成可執行的斷言。
+#
+# 每個案例的 expect 區塊只斷言**該斷言的事**：
+# 絕對分數會隨 base_weight 微調而變，所以斷言的是「誰該在哪一層」
+# 與「誰該排在誰前面」這類相對關係。
+
+- id: cold_start_coding_test
+  description: >
+    冷啟動：一份 JD 都還沒貼，目標是以 Python 為主的程式上機測驗。
+    這是 v0.1 唯一會走到的路徑，也是最重要的一個案例——
+    沒有 JD 的時候網站照樣要給得出合理的計畫。
+  jd:
+    total: 0
+    hits: {}
+  user:
+    levels: {}
+    goal_topics:
+      - python_basic
+      - arrays
+      - hashmaps
+      - strings
+      - sorting
+      - greedy
+      - search
+      - stacks_queues
+  expect:
+    # 必學層應該剛好等於 HackerRank Interview Preparation Kit 的八個章節。
+    # 這不是巧合：goal_factor 1.3 乘上去之後，這八個主題的分數
+    # 恰好把 time_complexity（7×1.0=7.0）以下全部壓到第 9 名之後。
+    must_exactly:
+      - hashmaps
+      - python_basic
+      - arrays
+      - greedy
+      - sorting
+      - strings
+      - search
+      - stacks_queues
+    # 所有 jd_factor 都必須是 1.0，不能出現除以零或 0 分。
+    all_jd_factor_equals: 1.0
+    # 最低分也必須大於 0，否則排程會拿到一堆無法排序的 0。
+    min_score_above: 0.0
+
+- id: already_familiar_drops_out
+  description: >
+    使用者把 Hash Map 與 Arrays 標成「已熟」。這兩個主題的 base_weight
+    最高（10 與 9），但乘上 gap_factor 0.3 之後應該掉出必學層——
+    這就是 gap_factor 存在的意義：清單要跟著人走，不是固定的課綱。
+  jd:
+    total: 0
+    hits: {}
+  user:
+    levels:
+      hashmaps: familiar
+      arrays: familiar
+    goal_topics:
+      - python_basic
+      - arrays
+      - hashmaps
+  expect:
+    not_in_must:
+      - hashmaps
+      - arrays
+    in_must:
+      - python_basic
+    # 已熟的主題分數要下降但不能歸零（0.3 不是 0），否則永遠排不到複習。
+    min_score_above: 0.0
+
+- id: jd_lifts_matching_topic
+  description: >
+    貼了 4 份 JD，其中 4 份都提到圖論、1 份提到位元運算。
+    graphs 的 base_weight 只有 6，低於 hashmaps 的 10，
+    但 jd_factor 拉到上限 2.0 之後應該進必學層。
+    同時驗證 jd_factor 的上限真的夾在 2.0——這是 jd_factor
+    不該顛覆 base_weight 基本盤的保險。
+  jd:
+    total: 4
+    hits:
+      graphs: 4
+      bit_manipulation: 1
+  user:
+    levels: {}
+    goal_topics: []
+  expect:
+    in_must:
+      - graphs
+    max_jd_factor_equals: 2.0
+    # 即使 jd_factor 吃滿 2.0，base_weight 3 的 bit_manipulation
+    # （3 × 1.25 = 3.75）仍然不該贏過 base_weight 10 的 hashmaps（10 × 1.0）。
+    ranks_above:
+      - [hashmaps, bit_manipulation]

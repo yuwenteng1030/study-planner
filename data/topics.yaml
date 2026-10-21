@@ -1,0 +1,249 @@
+# study-planner 知識地圖（領域：python）
+#
+# 這份檔案是評分與排程的輸入，不是教材大綱。每個主題只需要三件事：
+#   base_weight       主題本身的重要性（1–10），不受使用者或 JD 影響
+#   prereq            先修主題的 id；planner 保證先修一定排在後面之前
+#   key_points        顯示在任務卡上的提示，也是 LLM 掛掉時的備援文字
+#
+# base_weight 的來源是《學習網頁架構設計.md》§4 的「必練重點優先順序」：
+#   Hash Map 10、兩指標／Sliding Window 9、排序＋貪婪＋區間 8、
+#   Stack／Queue 7、Binary Search 7、Tree／Graph 6、DP 基本型 5
+# 2026-10-14 題庫改為只用 HackerRank 之後，主題改採 HackerRank
+# Interview Preparation Kit 的章節名稱，上面那組權重依下列對照搬過來：
+#   兩指標／Sliding Window／前綴和 → 併入 arrays（模式名保留在 tasks.static_note）
+#   區間問題                      → 併入 greedy
+# 因此 arrays 拿到 9、greedy 拿到 8，不是另外估的。
+#
+# prereq 構成有向無環圖（DAG）。本檔刻意按拓撲順序書寫：
+# 任何主題的 prereq 只會指向在它上面出現過的主題，用眼睛就能確認沒有循環。
+# scripts/validate_graph.py（排 11/27）會自動檢查這件事。
+
+- id: python_basic
+  name: Python 語法與內建資料結構
+  domain: python
+  base_weight: 10
+  prereq: []
+  key_points:
+    - list／dict／set／tuple 各自的查找與插入成本
+    - 字串不可變，累加字串要用 join 不要用 +=
+    - 讀 stdin：input() 與 sys.stdin.readline() 在大量輸入時差很多
+    - 推導式與 enumerate／zip／sorted(key=) 是上機考的基本手速
+
+- id: time_complexity
+  name: 時間與空間複雜度
+  domain: python
+  base_weight: 7
+  prereq: [python_basic]
+  key_points:
+    - 從輸入規模反推可接受的複雜度：n ≤ 1e5 時 O(n²) 會超時
+    - 攤還分析：list.append 是 O(1) 攤還，不是 O(n)
+    - 空間也要算：遞迴深度就是空間成本
+
+- id: arrays
+  name: Arrays
+  domain: python
+  base_weight: 9
+  prereq: [python_basic]
+  key_points:
+    - 前綴和：區間總和一次預處理之後都是 O(1)
+    - 差分陣列：大量「區間加值」只改兩端，最後掃一次
+    - 固定長度窗口：進一個出一個，不要每次重算
+    - 兩指標：排序過或單調時才能用
+    - 取模做位移，不要真的搬移元素
+
+- id: strings
+  name: String Manipulation
+  domain: python
+  base_weight: 8
+  prereq: [python_basic]
+  key_points:
+    - 字元計數用 collections.Counter，比手寫 dict 少出錯
+    - 判斷 anagram：排序後比較 O(n log n)，計數比較 O(n)
+    - 子字串枚舉是 O(n²) 個，先確認 n 夠小
+    - 迴文從中心往外擴，不要反轉後比較
+
+- id: hashmaps
+  name: Dictionaries and Hashmaps
+  domain: python
+  base_weight: 10
+  prereq: [arrays]
+  key_points:
+    - 「找有沒有出現過」一律先想 dict／set，O(1) 取代 O(n) 掃描
+    - 一邊走一邊存：很多兩層迴圈的題目可以降成一層
+    - defaultdict 省掉 key 不存在的判斷
+    - dict 的 key 必須可雜湊，list 不行、tuple 可以
+
+- id: sorting
+  name: Sorting
+  domain: python
+  base_weight: 8
+  prereq: [arrays, time_complexity]
+  key_points:
+    - 實務上一律用 sorted()／list.sort()，自己寫排序只為了面試解釋
+    - 多鍵排序用 key=lambda x: (a, b)；要反向就取負值
+    - 穩定排序的意義：相同鍵的原始順序會保留
+    - 排序常常只是前置動作，真正的解法在排序之後
+
+- id: search
+  name: Search
+  domain: python
+  base_weight: 7
+  prereq: [sorting]
+  key_points:
+    - 二分搜尋的前提是單調，不一定是「已排序的陣列」
+    - 邊界寫法固定一種就好（建議左閉右開），避免每次重想
+    - 二分答案：答案有單調性時，對答案本身做二分
+    - bisect 模組可以直接用，但要能手寫
+
+- id: greedy
+  name: Greedy Algorithms
+  domain: python
+  base_weight: 8
+  prereq: [sorting]
+  key_points:
+    - 貪婪幾乎都以排序為前置，先問「照哪個鍵排」
+    - 要能說出為什麼局部最佳會導致全域最佳，否則就是猜
+    - 區間問題：按結束時間排序取最多不重疊；按開始時間排序做合併
+    - 反例檢查：想不出反例不代表正確，但想出反例就一定錯
+
+- id: stacks_queues
+  name: Stacks and Queues
+  domain: python
+  base_weight: 7
+  prereq: [arrays]
+  key_points:
+    - 括號配對、運算式求值是堆疊的原型題
+    - 單調堆疊：求「下一個更大的元素」「能撐多寬」
+    - 用 collections.deque 做佇列，list.pop(0) 是 O(n)
+    - 環狀起點問題可以用前綴和的最低點解掉
+
+- id: linked_lists
+  name: Linked Lists
+  domain: python
+  base_weight: 6
+  prereq: [python_basic]
+  key_points:
+    - 加一個 dummy head，刪除與插入就不用特判頭節點
+    - 快慢指針：找中點、偵測環、找環的入口
+    - 反轉鏈結串列要畫圖，三個指針 prev／cur／next
+    - Python 沒有內建鏈結串列，面試題會自己給節點類別
+
+- id: recursion
+  name: Recursion and Backtracking
+  domain: python
+  base_weight: 5
+  prereq: [python_basic]
+  key_points:
+    - 先寫終止條件，再寫縮小問題規模的那一步
+    - 回溯三件事：選擇、遞迴、撤銷選擇
+    - 排列與組合的差別在於要不要傳 start 索引
+    - Python 預設遞迴深度 1000，深度遞迴要改成迭代
+
+- id: trees
+  name: Trees
+  domain: python
+  base_weight: 6
+  prereq: [recursion, linked_lists]
+  key_points:
+    - 前／中／後序只差「處理自己」放在哪一行
+    - 二元搜尋樹的中序走訪是遞增序列，這點常是解題關鍵
+    - 層序走訪用佇列，要分層就先記下當層長度
+    - 樹的題目先問「能不能用遞迴把左右子樹的答案合起來」
+
+- id: heaps
+  name: Heaps
+  domain: python
+  base_weight: 5
+  prereq: [arrays, sorting]
+  key_points:
+    - heapq 只有最小堆，要最大堆就把值取負
+    - 求第 k 大：維護大小為 k 的最小堆，O(n log k)
+    - 動態中位數：一個最大堆配一個最小堆，兩邊維持平衡
+    - 要的是「一直拿最小值」才用堆，只排一次用 sorted 就好
+
+- id: graphs
+  name: Graphs
+  domain: python
+  base_weight: 6
+  prereq: [trees, stacks_queues]
+  key_points:
+    - 鄰接表用 defaultdict(list)，鄰接矩陣只在稠密圖才划算
+    - 無權圖的最短路徑是 BFS，不是 Dijkstra
+    - DFS 要記 visited，否則有環就無窮迴圈
+    - 拓撲排序＝入度為 0 的點依序移除；排不完就代表有循環
+
+- id: dp_1d
+  name: Dynamic Programming（一維）
+  domain: python
+  base_weight: 5
+  prereq: [recursion, arrays]
+  key_points:
+    - 先寫出遞迴＋記憶化，再改成迭代填表
+    - 定義狀態要能一句話講完：dp[i] 代表什麼
+    - 轉移方程寫在註解裡，之後自己才看得懂
+    - 只依賴前一兩項時可以把空間壓成常數
+
+- id: dp_2d
+  name: Dynamic Programming（二維）
+  domain: python
+  base_weight: 4
+  prereq: [dp_1d]
+  key_points:
+    - 兩個序列的題目通常是 dp[i][j]：各取前 i、前 j 個
+    - 邊界那一列與那一行先初始化，大半的錯都在這
+    - 背包問題：容量當其中一個維度
+    - 滾動陣列可以把二維壓成一維，但先寫對再優化
+
+- id: two_d_arrays
+  name: 二維陣列與矩陣
+  domain: python
+  base_weight: 4
+  prereq: [arrays]
+  key_points:
+    - 建立二維陣列不能用 [[0]*m]*n，那是同一列的 n 個引用
+    - 方向陣列 [(0,1),(1,0),(0,-1),(-1,0)] 取代四段重複程式
+    - 邊界檢查寫成一個函式，不要每次都寫四個條件
+    - 原地旋轉：先轉置再左右翻
+
+- id: bit_manipulation
+  name: 位元運算
+  domain: python
+  base_weight: 3
+  prereq: [python_basic]
+  key_points:
+    - x & 1 判斷奇偶、x >> 1 取代除以二
+    - XOR 自己等於 0：找出唯一不成對的元素
+    - x & (x-1) 消掉最低位的 1，用來數 1 的個數
+    - Python 整數沒有溢位，負數位移要小心
+
+- id: math_number_theory
+  name: 數學與數論
+  domain: python
+  base_weight: 3
+  prereq: [python_basic]
+  key_points:
+    - 最大公因數用輾轉相除，math.gcd 可直接用
+    - 質數篩法比逐一試除快，n 大時差距明顯
+    - 取模運算：(a+b)%m、(a*b)%m 可以邊算邊取模
+    - 整數除法用 //，負數的結果跟其他語言不一樣
+
+- id: tries
+  name: 字典樹（Trie）
+  domain: python
+  base_weight: 2
+  prereq: [trees, strings]
+  key_points:
+    - 節點用 dict 存子節點，比固定 26 格省空間
+    - 要標記「這裡是一個完整字」，否則前綴會被誤判
+    - 適用場景是大量字串的共同前綴查詢
+    - 自動完成與字典比對是典型應用
+
+- id: misc
+  name: Miscellaneous
+  domain: python
+  base_weight: 3
+  prereq: [python_basic]
+  key_points:
+    - 這章是混合題，解法通常是前面主題的組合
+    - 先辨識題目屬於哪個模式，再套既有做法
+    - 讀題時間佔比高，先把輸入輸出格式弄清楚
