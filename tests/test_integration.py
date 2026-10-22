@@ -109,7 +109,7 @@ def test_repository_load_matches_source_files(session: Session) -> None:
     topics = repo.load_topic_nodes(session)
     tasks = repo.load_task_inputs(session)
     assert len(topics) == 21
-    assert len(tasks) == 122
+    assert len(tasks) == 125
     # prereq 必須真的讀進來，不能全是空的——這種錯會讓排程看起來正常但順序全錯。
     assert any(t.prereq for t in topics)
     assert {t.id for t in topics} >= {t.topic_id for t in tasks}

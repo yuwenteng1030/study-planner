@@ -66,7 +66,11 @@ def test_jd_factor_cannot_overturn_base_weight() -> None:
 
     base_weight 3 吃滿 JD 加權（3 × 2.0 = 6.0）仍然要輸給
     base_weight 8 完全沒被提到（8 × 1.0 = 8.0）。
-    如果上限改成 3.0，3 × 3.0 = 9.0 就會反超，這個測試會紅。
+
+    注意：只把 ``JD_FACTOR_MAX`` 改成 3.0，這個測試**不會**紅——
+    ``1 + ratio`` 本來就到不了 3，夾鉗從未生效。只改公式（例如 ``1 + 2 × ratio``）
+    也不會紅——夾鉗會開始生效，上限仍是 2。要公式**和**上限一起放寬才會紅。
+    見 README 設計決策 2。
     """
     niche = TopicInput(id="niche", name="冷門", base_weight=3)
     core = TopicInput(id="core", name="核心", base_weight=8)

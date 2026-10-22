@@ -26,6 +26,7 @@ HR,Sherlock and the Valid String,https://www.hackerrank.com/challenges/sherlock-
 HR,Sherlock and Anagrams,https://www.hackerrank.com/challenges/sherlock-and-anagrams/problem,strings,hashmaps,Medium,40,列舉子字串並正規化後計數
 HR,Special String Again,https://www.hackerrank.com/challenges/special-palindrome-again/problem,strings,,Medium,35,把連續相同字元壓成段落再數
 HR,Common Child,https://www.hackerrank.com/challenges/common-child/problem,strings,,Medium,40,最長共同子序列，二維 DP 的入門題
+HR,Determining DNA Health,https://www.hackerrank.com/challenges/determining-dna-health/problem,strings,hashmaps,Hard,70,每個基因名稱對應到出現位置的有序清單，再用前綴和加二分搜尋算區間總分
 HR,Sales by Match,https://www.hackerrank.com/challenges/sock-merchant/problem,hashmaps,,Easy,15,用字典計數，雜湊表最基本的應用
 HR,Hash Tables: Ransom Note,https://www.hackerrank.com/challenges/ctci-ransom-note/problem,hashmaps,,Easy,20,計數後逐項扣減，注意大小寫敏感
 HR,Picking Numbers,https://www.hackerrank.com/challenges/picking-numbers/problem,hashmaps,,Easy,20,相鄰兩個值的計數相加取最大
@@ -35,16 +36,17 @@ HR,Big Sorting,https://www.hackerrank.com/challenges/big-sorting/problem,sorting
 HR,Minimum Absolute Difference in an Array,https://www.hackerrank.com/challenges/minimum-absolute-difference-in-an-array/problem,sorting,,Easy,15,排序後只需比相鄰兩項
 HR,Closest Numbers,https://www.hackerrank.com/challenges/closest-numbers/problem,sorting,,Easy,20,排序後掃一次，同時收集所有最小差配對
 HR,Bubble Sort,https://www.hackerrank.com/challenges/ctci-bubble-sort/problem,sorting,,Easy,20,只要數交換次數，不需要真的排完
-HR,Comparator,https://www.hackerrank.com/challenges/ctci-comparator-sorting/problem,sorting,,Easy,25,多鍵排序與穩定性，面試要能解釋
+HR,Comparator,https://www.hackerrank.com/challenges/ctci-comparator-sorting/problem,sorting,,Medium,25,多鍵排序與穩定性，面試要能解釋
 HR,Minimum Swaps 2,https://www.hackerrank.com/challenges/minimum-swaps-2/problem,sorting,,Medium,30,值與索引的對應關係，交換到位即可
 HR,Fraudulent Activity Notifications,https://www.hackerrank.com/challenges/fraudulent-activity-notifications/problem,sorting,,Medium,45,滑動中位數，用計數排序維護視窗
 HR,Full Counting Sort,https://www.hackerrank.com/challenges/countingsort4/problem,sorting,,Medium,40,計數排序的穩定版，輸出要保留原始順序
-HR,Merge Sort: Counting Inversions,https://www.hackerrank.com/challenges/ctci-merge-sort/problem,sorting,,Medium,45,逆序對數量＝合併排序的副產品
+HR,Merge Sort: Counting Inversions,https://www.hackerrank.com/challenges/ctci-merge-sort/problem,sorting,,Hard,45,逆序對數量＝合併排序的副產品
 HR,Ice Cream Parlor,https://www.hackerrank.com/challenges/icecream-parlor/problem,search,hashmaps,Easy,20,找兩數和等於目標，邊走邊建表
 HR,Pairs,https://www.hackerrank.com/challenges/pairs/problem,search,sorting,Medium,30,找固定差值的配對，集合或雙指標皆可
 HR,Triple sum,https://www.hackerrank.com/challenges/triple-sum/problem,search,sorting,Medium,40,固定中間那個數，左右各用二分計數
 HR,Minimum Time Required,https://www.hackerrank.com/challenges/minimum-time-required/problem,search,,Medium,45,對答案本身做二分，單調性是前提
 HR,Maximum Subarray Sum,https://www.hackerrank.com/challenges/maximum-subarray-sum/problem,search,,Hard,60,前綴和取模後用有序集合找最接近值
+HR,Making Candies,https://www.hackerrank.com/challenges/making-candies/problem,search,,Hard,65,對答案（天數）做二分搜尋，注意乘法溢位與提早結束
 HR,Mark and Toys,https://www.hackerrank.com/challenges/mark-and-toys/problem,greedy,sorting,Easy,20,排序後取最便宜，要能說明為何最佳
 HR,Luck Balance,https://www.hackerrank.com/challenges/luck-balance/problem,greedy,sorting,Easy,20,可放棄的項目排序後取前 k 大
 HR,Priyanka and Toys,https://www.hackerrank.com/challenges/priyanka-and-toys/problem,greedy,sorting,Easy,20,排序後以最小值開新容器，區間覆蓋
@@ -53,6 +55,7 @@ HR,Jim and the Orders,https://www.hackerrank.com/challenges/jim-and-the-orders/p
 HR,Max Min,https://www.hackerrank.com/challenges/angry-children/problem,greedy,sorting,Medium,30,排序後取連續 k 個，窗口最小差
 HR,Greedy Florist,https://www.hackerrank.com/challenges/greedy-florist/problem,greedy,sorting,Medium,35,由貴到便宜分配，貪婪順序決定答案
 HR,Cutting Boards,https://www.hackerrank.com/challenges/board-cutting/problem,greedy,sorting,Hard,55,由貴到便宜切，切痕數量隨已切次數成長
+HR,Chief Hopper,https://www.hackerrank.com/challenges/chief-hopper/problem,greedy,,Hard,50,從最後一棟往回推最低所需能量，倒著想比正著試簡單
 HR,Maximum Element,https://www.hackerrank.com/challenges/maximum-element/problem,stacks_queues,,Easy,20,輔助堆疊同步記錄當前最大值
 HR,Equal Stacks,https://www.hackerrank.com/challenges/equal-stacks/problem,stacks_queues,arrays,Easy,25,先算前綴高度，再同步往下退
 HR,Balanced Brackets,https://www.hackerrank.com/challenges/balanced-brackets/problem,stacks_queues,,Medium,25,多種括號配對，型別也要相符
@@ -87,11 +90,11 @@ HR,Balanced Forest,https://www.hackerrank.com/challenges/balanced-forest/problem
 HR,QHEAP1,https://www.hackerrank.com/challenges/qheap1/problem,heaps,,Easy,25,heapq 配一個已刪集合做延遲刪除
 HR,Jesse and Cookies,https://www.hackerrank.com/challenges/jesse-and-cookies/problem,heaps,,Easy,25,一直取最小值才用堆，排一次用 sorted 就好
 HR,Find the Running Median,https://www.hackerrank.com/challenges/find-the-running-median/problem,heaps,,Hard,50,最大堆配最小堆，兩邊維持平衡
-HR,BFS: Shortest Reach in a Graph,https://www.hackerrank.com/challenges/ctci-bfs-shortest-reach/problem,graphs,,Medium,35,無權圖最短路是 BFS，不是 Dijkstra
 HR,Roads and Libraries,https://www.hackerrank.com/challenges/torque-and-development/problem,graphs,,Medium,40,算連通塊數量，再比兩種成本
 HR,Journey to the Moon,https://www.hackerrank.com/challenges/journey-to-the-moon/problem,graphs,,Medium,45,連通塊大小的兩兩配對計數
 HR,Find the nearest clone,https://www.hackerrank.com/challenges/find-the-nearest-clone/problem,graphs,,Medium,40,多起點 BFS，同色節點一起下水
 HR,Even Tree,https://www.hackerrank.com/challenges/even-tree/problem,graphs,,Medium,35,子樹大小為偶數就可以切一刀
+HR,BFS: Shortest Reach in a Graph,https://www.hackerrank.com/challenges/ctci-bfs-shortest-reach/problem,graphs,,Hard,35,無權圖最短路是 BFS，不是 Dijkstra
 HR,Matrix,https://www.hackerrank.com/challenges/matrix/problem,graphs,,Hard,70,由大到小加邊的反向思考（並查集）
 HR,Max Array Sum,https://www.hackerrank.com/challenges/max-array-sum/problem,dp_1d,,Medium,35,dp[i] 只依賴前兩項，空間可壓成常數
 HR,The Coin Change Problem,https://www.hackerrank.com/challenges/coin-change/problem,dp_1d,,Medium,40,硬幣在外層、金額在內層才不會重複計數
@@ -106,18 +109,18 @@ HR,Forming a Magic Square,https://www.hackerrank.com/challenges/magic-square-for
 HR,Lonely Integer,https://www.hackerrank.com/challenges/lonely-integer/problem,bit_manipulation,,Easy,15,XOR 自己等於 0，一次掃完
 HR,Flipping bits,https://www.hackerrank.com/challenges/flipping-bits/problem,bit_manipulation,,Easy,20,固定 32 位元，Python 要自己遮罩
 HR,Maximizing XOR,https://www.hackerrank.com/challenges/maximizing-xor/problem,bit_manipulation,,Easy,20,最高位不同的那一位決定答案
-HR,Sum vs XOR,https://www.hackerrank.com/challenges/sum-vs-xor/problem,bit_manipulation,,Medium,25,n 的 0 位元個數決定答案數量
+HR,Sum vs XOR,https://www.hackerrank.com/challenges/sum-vs-xor/problem,bit_manipulation,,Easy,25,n 的 0 位元個數決定答案數量
 HR,Counter game,https://www.hackerrank.com/challenges/counter-game/problem,bit_manipulation,,Medium,30,x & (x-1) 消最低位的 1，數步數定勝負
-HR,Is Fibo,https://www.hackerrank.com/challenges/is-fibo/problem,math_number_theory,,Easy,20,先推出封閉形式或預先建表，再決定怎麼查
 HR,Handshake,https://www.hackerrank.com/challenges/handshake/problem,math_number_theory,,Easy,10,組合數 C(n
 HR,Restaurant,https://www.hackerrank.com/challenges/restaurant/problem,math_number_theory,,Easy,15,最大公因數，math.gcd 可直接用
 HR,Halloween Sale,https://www.hackerrank.com/challenges/halloween-sale/problem,math_number_theory,,Easy,20,等比遞減取整，注意下界
 HR,Sherlock and Divisors,https://www.hackerrank.com/challenges/sherlock-and-divisors/problem,math_number_theory,,Easy,20,只枚舉到 sqrt(n)，成對計入
 HR,Maximum Draws,https://www.hackerrank.com/challenges/maximum-draws/problem,math_number_theory,,Easy,10,鴿籠原理，答案是 n+1
+HR,Is Fibo,https://www.hackerrank.com/challenges/is-fibo/problem,math_number_theory,,Medium,20,先推出封閉形式或預先建表，再決定怎麼查
 HR,Time Complexity: Primality,https://www.hackerrank.com/challenges/ctci-big-o/problem,math_number_theory,,Medium,25,只試到 sqrt(n)，質數判斷的標準做法
-HR,Contacts,https://www.hackerrank.com/challenges/contacts/problem,tries,,Hard,50,節點用 dict 存子節點，順手記前綴計數
+HR,Contacts,https://www.hackerrank.com/challenges/contacts/problem,tries,,Medium,50,節點用 dict 存子節點，順手記前綴計數
 HR,No Prefix Set,https://www.hackerrank.com/challenges/no-prefix-set/problem,tries,,Hard,45,插入時同時檢查兩個方向的前綴衝突
 HR,Flipping the Matrix,https://www.hackerrank.com/challenges/flipping-the-matrix/problem,misc,,Medium,40,每個位置只有四個候選，取最大即可
 HR,Almost Sorted,https://www.hackerrank.com/challenges/almost-sorted/problem,misc,,Medium,40,先找出不合序的位置，再分類討論
 HR,Maximum Xor,https://www.hackerrank.com/challenges/maximum-xor/problem,misc,,Medium,40,把數字建成字典樹，逐位走相反方向
-HR,Friend Circle Queries,https://www.hackerrank.com/challenges/friend-circle-queries/problem,misc,,Hard,60,並查集，同時維護最大集合大小
+HR,Friend Circle Queries,https://www.hackerrank.com/challenges/friend-circle-queries/problem,misc,,Medium,60,並查集，同時維護最大集合大小

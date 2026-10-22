@@ -19,6 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 HOME = str(PROJECT_ROOT / "app" / "Home.py")
 TODAY_PAGE = str(PROJECT_ROOT / "app" / "pages" / "1_今日任務.py")
 DATA_PAGE = str(PROJECT_ROOT / "app" / "pages" / "2_我的資料.py")
+MAP_PAGE = str(PROJECT_ROOT / "app" / "pages" / "3_學習地圖.py")
 
 TIMEOUT = 60
 
@@ -112,6 +113,45 @@ def test_progress_moves_in_the_same_run_as_the_click(seeded_app_db) -> None:
     assert page.progress[1].value > before, (
         "打勾後進度條沒有在同一輪更新——使用者要按重新整理才看得到自己的進度"
     )
+
+
+def test_map_page_draws_four_zones(seeded_app_db) -> None:
+    """地圖頁要畫得出四個區域，每個有題目的關卡各一條進度條。"""
+    app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+    assert [h.value for h in app.subheader] == ["起點", "第一區", "第二區", "第三區"]
+    # 1 條全部進度 + 20 個有題目的關卡（time_complexity 是觀念關，不畫進度條）
+    assert len(app.progress) == 21
+
+
+def test_map_page_counts_tasks_checked_on_the_today_page(seeded_app_db) -> None:
+    """在今日任務頁打勾之後，地圖的總題數要跟著多。
+
+    自己排計畫、自己打勾，不依賴前面測試留下的狀態。勾的是今天**還沒做過**
+    的題目：地圖算的是不重複的題目，勾一題之前別的計畫裡已經做過的，數字不會動。
+    計數本身的正確性由 ``test_game_map.py`` 守；這裡確認頁面真的接到了資料庫。
+    """
+    def map_done() -> int:
+        app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
+        assert not app.exception, [str(e.value) for e in app.exception]
+        # 讀文字，不讀 ``.value``：Streamlit 把進度存成整數百分比，
+        # 1 / 125 ≒ 0.8% 會被截成 0，數值比對會誤判成「沒接上資料庫」。
+        return int(app.progress[0].proto.text.split()[1])  # 「全部 n / m 題」
+
+    home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    home.number_input[0].set_value(10)
+    home.number_input[1].set_value(1.0)
+    home.button[0].click().run()
+    assert not home.exception
+
+    before = map_done()
+    page = AppTest.from_file(TODAY_PAGE, default_timeout=TIMEOUT).run()
+    for box in page.checkbox:
+        box.set_value(True).run()
+        assert not page.exception, [str(e.value) for e in page.exception]
+        if map_done() > before:
+            return
+    pytest.fail(f"今天每一題都勾了，地圖仍停在 {before} 題")
 
 
 def test_overlapping_self_assessment_is_rejected(seeded_app_db) -> None:

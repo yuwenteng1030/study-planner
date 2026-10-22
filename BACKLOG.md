@@ -20,6 +20,10 @@
    原來是靠「它沒有題目」撐著的。詳情見下面「待你裁定」。
 3. **估時校正驗證**：拿累積的 `actual_minutes` 跑一次，看預估準不準，把結果寫成 README 的一段數據
 4. **評估集擴充**：從 20 題擴到 40 題，比較 FTS5 關鍵字檢索 vs embedding 的差別
+- ~~**學習地圖（唯讀版）**~~（不在原清單，不佔編號，免得其他文件裡的「BACKLOG #n」對不上）
+   → **2026-10-22 完成**（使用者指定提前做）。`app/pages/3_學習地圖.py` ＋ `core/game_map.py`，
+   區域從 `topics.prereq` 的最長前置鏈算出，進度跨所有計畫計算，14 個測試。
+   **刻意沒做**：星等、解鎖、Boss 關。破關門檻是參數（提案決策 5），看過畫面再定。
 
 ## 次要
 
@@ -66,12 +70,44 @@
 
 ### C. 題庫難度分佈與考試不對稱
 
-題庫 122 題：Easy 59、Medium 52、Hard 11。而上機測驗是
-**兩題 Medium + 一題 Hard，125 分門檻**（見《全職求職時程》§0）。
-Hard 只有 11 題，而且集中在 arrays／stacks_queues／trees／graphs／tries／misc；
-hashmaps、strings、sorting、greedy、search 一題 Hard 都沒有。
+上機測驗是**兩題 Medium + 一題 Hard，125 分門檻**（見《全職求職時程》§0）。
 
-AI 沒有自行補 Hard 題去湊分佈——該補幾題、補在哪些主題，是你的判斷。
+**2026-10-22 更正**：先前寫「hashmaps、strings、sorting、greedy、search 一題 Hard
+都沒有」是錯的——清點時讀錯了 CSV 欄位。實際上 greedy（Cutting Boards）與
+search（Maximum Subarray Sum）本來就各有 1 題 Hard。
+
+同一天把題庫的難度全部對過 HackerRank 官方 API，有 7 題標錯，已照官方改正：
+
+| 題目 | 原本 | 官方 |
+|---|---|---|
+| Merge Sort: Counting Inversions | Medium | **Hard** |
+| BFS: Shortest Reach in a Graph | Medium | **Hard** |
+| Contacts | Hard | Medium |
+| Friend Circle Queries | Hard | Medium |
+| Sorting: Comparator | Easy | Medium |
+| Is Fibo | Easy | Medium |
+| Sum vs XOR | Medium | Easy |
+
+並依你的決定補了 3 題 Hard：strings 加 `Determining DNA Health`、greedy 加 `Chief Hopper`、
+search 加 `Making Candies`。三題的 `est_minutes`（70／50／65）與 `static_note` 是 AI 給的，
+歸在上面 B 一起抽查。
+
+現在題庫 125 題：Easy 58、Medium 53、Hard 14。**改難度標籤的副作用**：
+`misc` 原本唯一的 Hard（Friend Circle Queries）其實是 Medium，所以 misc 變成沒有 Hard；
+`tries` 從 2 題 Hard 變 1 題。
+
+**10/22 已決定**：hashmaps 維持沒有 Hard——HackerRank 面試準備包的 Hashmaps 章本身就沒有 Hard，
+hashmap 的技巧會出現在別的主題的 Hard 裡（例如 Determining DNA Health）。
+
+### D. 學習地圖的三個顯示選擇
+
+唯讀地圖頁（2026-10-22）裡有三個 AI 自己決定的地方，都只影響畫面、不影響排程：
+
+1. **區號＝到起點的最長前置鏈**。取最短的話，有兩個前置的主題（例如 `sorting`）
+   可能跟自己的前置擠在同一區。寫成了 `test_zone_uses_the_longest_prereq_chain`。
+2. **同區之內照 `base_weight` 由高到低**。同區主題彼此沒有前置關係，順序只是顯示；
+   原本照資料庫的 id 字母序，沒有意義。
+3. **進度跨所有計畫算**（含已收起來的）。重排一份新計畫不該讓地圖歸零。
 
 ## 環境待辦
 

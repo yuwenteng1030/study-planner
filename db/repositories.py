@@ -209,6 +209,21 @@ def completed_task_ids(plan: Plan) -> set[int]:
     return {i.task_id for i in plan.items if i.status == "done"}
 
 
+def load_completed_task_ids_for_user(session: Session, user_id: int) -> set[int]:
+    """這位使用者**所有**計畫裡完成過的題目，供學習地圖用。
+
+    不能只看目前的計畫：重排一份新計畫是常有的事，地圖的進度不該因此歸零。
+    已收起來的計畫照樣算——題目做過就是做過。
+    """
+    rows = session.scalars(
+        select(PlanItem.task_id)
+        .join(Plan, PlanItem.plan_id == Plan.id)
+        .where(Plan.user_id == user_id, PlanItem.status == "done")
+        .distinct()
+    )
+    return set(rows)
+
+
 # ---------------------------------------------------------------------------
 # 寫：進度與重排
 # ---------------------------------------------------------------------------

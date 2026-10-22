@@ -30,6 +30,9 @@ from dataclasses import dataclass, field
 #: 設 3 會讓 JD 蓋過 base_weight——一個 base_weight=3 的冷門主題只要每份 JD
 #: 都提到，就會贏過 base_weight=8 的核心主題（3×3=9 > 8×1=8）。
 #: 設 2 的話 3×2=6 < 8×1=8，JD 只能排序同級主題，不能顛覆基本盤。
+#:
+#: 注意：目前 ``jd_factor()`` 的 ``1 + ratio`` 因為 ratio ≤ 1，本來就 ≤ 2，
+#: 所以這個上界是公式的形狀給的，``min()`` 夾鉗從未生效（見 README 設計決策 2）。
 JD_FACTOR_MIN = 1.0
 JD_FACTOR_MAX = 2.0
 
