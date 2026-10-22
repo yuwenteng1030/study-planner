@@ -141,3 +141,38 @@ def db_session(tmp_path: Path) -> Iterator["object"]:
         seed_global_data(session)
         session.commit()
         yield session
+
+
+@pytest.fixture(scope="session")
+def topics() -> list["TopicNode"]:
+    """真實的 ``topics.yaml``（地圖與插畫的測試共用）。"""
+    from core.planner import TopicNode
+
+    rows = yaml.safe_load(TOPICS_PATH.read_text(encoding="utf-8"))
+    return [
+        TopicNode(
+            id=r["id"],
+            name=r["name"],
+            base_weight=int(r["base_weight"]),
+            prereq=tuple(r.get("prereq") or ()),
+        )
+        for r in rows
+    ]
+
+
+@pytest.fixture(scope="session")
+def tasks() -> list["TaskInput"]:
+    """真實的 ``tasks.csv``，id 照列序從 1 起。"""
+    from core.planner import TaskInput
+
+    with TASKS_PATH.open(encoding="utf-8") as handle:
+        return [
+            TaskInput(
+                id=i,
+                title=r["title"],
+                topic_id=r["topic"],
+                difficulty=r["difficulty"],
+                est_minutes=int(r["est_minutes"]),
+            )
+            for i, r in enumerate(csv.DictReader(handle), start=1)
+        ]

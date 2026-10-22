@@ -4,7 +4,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖皆可運作，138 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖皆可運作，153 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -41,7 +41,7 @@ Streamlit (app/)  →  core/  →  db/repositories.py  →  SQLite
 
 `core/` 是純函式：不碰資料庫、不發 HTTP、不呼叫 LLM，所以測試只需要傳字典。**換資料庫只改 `db/` 這一層。**
 
-四頁：`app/Home.py`（填條件、排計畫）、`app/pages/1_今日任務.py`（打勾、記時間、落後重排）、`app/pages/2_我的資料.py`（匯出、刪除）、`app/pages/3_學習地圖.py`（主題按前置關係分區，顯示每一關打了幾題）。
+四頁：`app/Home.py`（填條件、排計畫）、`app/pages/1_今日任務.py`（打勾、記時間、落後重排）、`app/pages/2_我的資料.py`（匯出、刪除）、`app/pages/3_學習地圖.py`（關卡圖：一條由下往上的蜿蜒小路，每關一個進度環，小熊站在下一關）。
 
 ## 設計決策
 
@@ -146,7 +146,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 python -m scripts.import_data      # 匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 138 個測試
+pytest -q                          # 153 個測試
 streamlit run app/Home.py
 ```
 
@@ -162,6 +162,7 @@ streamlit run app/Home.py
 | `tests/test_integration.py` | 資料庫 → 排程 → 存檔 → 重排 → 打勾的完整路徑 |
 | `tests/test_user_data.py` | 匯出含所有計畫、刪除的跨表順序、刪完帳號還能繼續用 |
 | `tests/test_game_map.py` | 學習地圖：分區取最長前置鏈、題數不重不漏、換計畫進度不歸零、不算別人的 |
+| `tests/test_map_art.py` | 地圖插畫：後面的區畫在上方、換排不橫跨整張圖、區名不壓在小路上、小熊不停在觀念關、關卡名跳脫 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
 UI 冒煙測試不是裝飾：`pytest` 全綠、伺服器回 200、log 乾淨的情況下，打勾功能曾經是一個無窮迴圈——`st.rerun()` 用拋例外實作，而那個例外會讓外層的交易 rollback，於是每次重跑都再標記一次。只有真的去點那個 checkbox 才會發現。

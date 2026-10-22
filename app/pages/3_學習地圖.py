@@ -2,6 +2,7 @@
 
 這一版刻意只讀不寫：沒有星等、沒有解鎖、不新增資料表。區域與進度都是
 從既有的 ``topics.prereq`` 與 ``plan_items.status`` 算出來的（``core/game_map.py``）。
+插畫（蜿蜒小路、進度環、小熊）在 ``core/map_art.py``，只畫不算。
 破關條件是參數，等看過這張圖再定。
 """
 
@@ -18,20 +19,21 @@ if str(_ROOT) not in sys.path:
 
 from api.deps import get_current_user  # noqa: E402
 from core.game_map import Level, build_map, difficulty_order  # noqa: E402
+from core.map_art import render_svg, zone_theme  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
 
 st.set_page_config(page_title="學習地圖", page_icon="🗺️", layout="centered")
 
-ZONE_NAME = {0: "起點", 1: "第一區", 2: "第二區", 3: "第三區"}
 DIFFICULTY_SHORT = {"Easy": "E", "Medium": "M", "Hard": "H"}
 
 
 def main() -> None:
     st.title("🗺️ 學習地圖")
     st.caption(
-        "每一關是一個主題，區域照前置關係排：排計畫時，前置主題的題目一定排在"
-        "後面關卡之前。進度算的是你所有計畫裡打過勾的題目。"
+        "每一關是一個主題，從最下面的起點往上走：排計畫時，前置主題的題目一定"
+        "排在後面關卡之前。圓環是那一關做了幾成，做完會變金色；小熊站在你下一個"
+        "要打的關卡旁。進度算的是你所有計畫裡打過勾的題目。"
     )
 
     with session_scope() as session:
@@ -50,13 +52,18 @@ def main() -> None:
     done = sum(lv.done_count for lv in levels)
     st.progress(done / total if total else 0.0, text=f"全部 {done} / {total} 題")
 
-    for zone in sorted({lv.zone for lv in levels}):
-        st.subheader(ZONE_NAME.get(zone, f"第 {zone} 區"))
-        in_zone = [lv for lv in levels if lv.zone == zone]
-        columns = st.columns(2)
-        for i, level in enumerate(in_zone):
-            with columns[i % 2]:
-                _render_level(level, names)
+    # 用 st.image 而不是 st.html：st.html 的 DOMPurify 會把整段 SVG 濾掉，畫面一片空白
+    st.image(render_svg(levels), width="stretch")
+
+    # 插畫在窄螢幕上字會很小，題數細節另外列一份文字版
+    with st.expander("每一關的題數（Easy／Medium／Hard）"):
+        for zone in sorted({lv.zone for lv in levels}):
+            st.subheader(zone_theme(zone)[0])
+            in_zone = [lv for lv in levels if lv.zone == zone]
+            columns = st.columns(2)
+            for i, level in enumerate(in_zone):
+                with columns[i % 2]:
+                    _render_level(level, names)
 
 
 def _render_level(level: Level, names: dict[str, str]) -> None:

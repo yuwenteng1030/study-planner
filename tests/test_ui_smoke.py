@@ -116,10 +116,11 @@ def test_progress_moves_in_the_same_run_as_the_click(seeded_app_db) -> None:
 
 
 def test_map_page_draws_four_zones(seeded_app_db) -> None:
-    """地圖頁要畫得出四個區域，每個有題目的關卡各一條進度條。"""
+    """地圖頁要有插畫，文字版也要列出四個區域、每個有題目的關卡各一條進度條。"""
     app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
     assert not app.exception, [str(e.value) for e in app.exception]
-    assert [h.value for h in app.subheader] == ["起點", "第一區", "第二區", "第三區"]
+    assert len(app.get("image")) == 1, "插畫沒畫出來"
+    assert [h.value for h in app.subheader] == ["起點・小木屋", "第一區・草原", "第二區・森林", "第三區・雪山"]
     # 1 條全部進度 + 20 個有題目的關卡（time_complexity 是觀念關，不畫進度條）
     assert len(app.progress) == 21
 

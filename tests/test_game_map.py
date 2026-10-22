@@ -6,52 +6,15 @@
 
 from __future__ import annotations
 
-import csv
 import datetime as _dt
-from pathlib import Path
 
 import pytest
-import yaml
 
 from core.game_map import build_map, zones
-from core.planner import TaskInput, TopicNode, build_plan
+from core.planner import TopicNode, build_plan
 from core.scoring import JDStats, UserContext
 from db import repositories as repo
 from db.models import User
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TOPICS_PATH = PROJECT_ROOT / "data" / "topics.yaml"
-TASKS_PATH = PROJECT_ROOT / "data" / "tasks.csv"
-
-
-@pytest.fixture(scope="module")
-def topics() -> list[TopicNode]:
-    rows = yaml.safe_load(TOPICS_PATH.read_text(encoding="utf-8"))
-    return [
-        TopicNode(
-            id=r["id"],
-            name=r["name"],
-            base_weight=int(r["base_weight"]),
-            prereq=tuple(r.get("prereq") or ()),
-        )
-        for r in rows
-    ]
-
-
-@pytest.fixture(scope="module")
-def tasks() -> list[TaskInput]:
-    with TASKS_PATH.open(encoding="utf-8") as handle:
-        return [
-            TaskInput(
-                id=i,
-                title=r["title"],
-                topic_id=r["topic"],
-                difficulty=r["difficulty"],
-                est_minutes=int(r["est_minutes"]),
-            )
-            for i, r in enumerate(csv.DictReader(handle), start=1)
-        ]
-
 
 # ---------------------------------------------------------------------------
 # 分區
