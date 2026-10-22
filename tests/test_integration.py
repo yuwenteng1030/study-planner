@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.planner import build_plan
 from core.replanner import replan
-from core.scoring import TIER_BONUS, TIER_MUST, UserContext
+from core.scoring import TIER_BONUS, TIER_MUST, TIER_RECOMMENDED, UserContext
 from db import repositories as repo
 from db.models import Base, PlanItem, ProgressEvent, Task, Topic, User
 
@@ -109,10 +109,18 @@ def test_repository_load_matches_source_files(session: Session) -> None:
     topics = repo.load_topic_nodes(session)
     tasks = repo.load_task_inputs(session)
     assert len(topics) == 21
-    assert len(tasks) == 44
+    assert len(tasks) == 122
     # prereq 必須真的讀進來，不能全是空的——這種錯會讓排程看起來正常但順序全錯。
     assert any(t.prereq for t in topics)
     assert {t.id for t in topics} >= {t.topic_id for t in tasks}
+
+    # 題庫擴充（BACKLOG 2）之後的新不變量：知識地圖上每個主題都要有題目，
+    # 只有 ``time_complexity`` 例外——它刻意維持零題目，理由見
+    # ``tests/test_planner.py::test_time_complexity_stays_task_free``。
+    # 沒有這條斷言的話，之後改主題 id 就可能悄悄讓某個主題變成空殼：
+    # 排程不會報錯，使用者只會看到計畫裡莫名少了一塊。
+    uncovered = {t.id for t in topics} - {t.topic_id for t in tasks}
+    assert uncovered == {"time_complexity"}, f"沒有題目的主題：{sorted(uncovered)}"
 
 
 def test_plan_is_persisted_and_reloadable(session: Session) -> None:
@@ -342,25 +350,25 @@ def test_replan_respects_daily_limit_in_the_database(session: Session) -> None:
         assert minutes <= plan.daily_minutes, f"{day} 排了 {minutes} 分鐘"
 
 
-def test_current_question_bank_produces_only_must_items(session: Session) -> None:
-    """記錄現狀：目前題庫排出來的計畫**全部都是「必學」**。
+def test_real_question_bank_now_produces_all_three_tiers(session: Session) -> None:
+    """題庫擴充之後，真實資料排出來要同時出現三個優先度層級。
 
-    原因是題庫只覆蓋 8 個主題，而那 8 個剛好就是百分位分級的必學層
-    （前 40% 共 8 個）。所以 ``bonus``／``recommended`` 的砍項目邏輯
-    在真實資料上根本不會被觸發。
+    這一支取代了 ``test_current_question_bank_produces_only_must_items``。
+    那支測試記錄的現狀是「題庫只覆蓋 8 個主題，而那 8 個剛好就是必學層，
+    所以排出來全部都是必學」，並且在說明裡寫好了結案條件：第二批題庫
+    （Trees／Graphs／DP／Recursion／Heaps）補進來之後就刪掉它。題庫已補，
+    所以它被刪了，換成這一支反向的斷言——否則「分級會出現三層」這件事
+    就只剩單元測試在保護，真實資料上沒人看著。
 
-    這不是 bug，但是一個**必須知道的現狀**：
-      * 「塞不下先砍 bonus」這條路徑只有單元測試在保護，沒有真實資料在跑。
-      * 第二批題庫（Trees／Graphs／DP／Recursion／Heaps）補進來之後，
-        這個測試就會紅——那時候要做的是刪掉這個測試，
-        而不是去改分級邏輯。
+    為什麼是 180 分鐘：那是《全職求職時程》每日作息表裡演算法的時數
+    （09:00–12:00，3 小時）。60 分鐘的計畫容量太小，連必學層都排不完，
+    看不到 ``bonus``——用自己實際的時數當測試參數，測到的才是會發生的情況。
     """
-    _, core_plan = _make_plan(session, days=10, daily=60)
+    _, core_plan = _make_plan(session, days=10, daily=180)
     priorities = {i.priority for i in core_plan.items}
-    assert priorities == {TIER_MUST}, (
-        f"題庫覆蓋範圍變了，現在出現 {priorities}。"
-        "請刪掉這個測試，並確認 test_culled_items_are_skipped_not_deleted "
-        "改用真實資料仍然成立。"
+    assert priorities == {TIER_MUST, TIER_RECOMMENDED, TIER_BONUS}, (
+        f"真實題庫只排出 {priorities}；"
+        "「塞不下先砍 bonus」這條路徑會變成只有單元測試在保護"
     )
 
 
@@ -369,22 +377,18 @@ def test_culled_items_are_skipped_not_deleted(session: Session) -> None:
 
     刪掉就回答不出「為什麼這題不見了」，也看不出計畫曾經包含它。
 
-    這裡**手動**把一部分項目改成 ``bonus``：真實題庫目前排出來全是
-    ``must``（見 ``test_current_question_bank_produces_only_must_items``），
-    而 ``must`` 永遠不砍，所以照原樣跑永遠測不到砍項目的寫回路徑。
+    **用真實題庫，不手動改優先度。** 原本這裡手動把一半的項目改成 ``bonus``，
+    因為那時題庫只覆蓋 8 個主題、排出來全是 ``must``，而 ``must`` 永遠不砍。
+    題庫補齊之後真實資料本來就會排出 ``bonus``（見上一支測試），所以這條
+    寫回路徑現在是用真的會發生的輸入在測，不是用擺好的局。
     """
-    _make_plan(session, days=10, daily=60)
+    _make_plan(session, days=10, daily=180)
     plan = repo.load_active_plan(session, USER_ID)
     assert plan is not None
     before = len(plan.items)
-
-    ordered = sorted(plan.items, key=lambda i: (i.scheduled_date, i.order_in_day))
-    for row in ordered[len(ordered) // 2 :]:
-        row.priority = TIER_BONUS
-    session.commit()
-
-    plan = repo.load_active_plan(session, USER_ID)
-    assert plan is not None
+    assert any(i.priority == TIER_BONUS for i in plan.items), (
+        "前提不成立：真實題庫沒排出任何加分項目，這一支就測不到砍項目"
+    )
 
     # 只剩一天，加分項目必然被砍掉。
     end_date = plan.start_date + _dt.timedelta(days=plan.days - 1)
@@ -404,8 +408,25 @@ def test_culled_items_are_skipped_not_deleted(session: Session) -> None:
     assert len(reloaded.items) == before, "項目不該被刪掉"
     skipped = [i for i in reloaded.items if i.status == "skipped"]
     assert skipped
-    assert all(i.priority == TIER_BONUS for i in skipped), "只該砍加分項目"
     assert all(i.reason for i in skipped), "被移出計畫的項目必須留下原因"
+
+    # ``CULL_ORDER`` 是 (bonus, recommended)：砍到只剩一天時，加分砍完還是裝不下，
+    # 就會往上砍建議層。所以不能斷言「只砍加分」——真正不能破的是這兩條：
+    #   1. 必學一項都不准砍
+    #   2. 加分要先砍完，才准動建議層
+    # 原本的斷言之所以看起來成立，是因為那時手動擺的局裡只有 must 與 bonus，
+    # 建議層根本不存在。
+    assert not [i for i in skipped if i.priority == TIER_MUST], "必學項目被砍掉了"
+    skipped_tiers = {i.priority for i in skipped}
+    if TIER_RECOMMENDED in skipped_tiers:
+        surviving_bonus = [
+            i
+            for i in reloaded.items
+            if i.priority == TIER_BONUS and i.status != "skipped"
+        ]
+        assert not surviving_bonus, (
+            f"砍了建議層，卻還留著 {len(surviving_bonus)} 項加分項目——砍的順序錯了"
+        )
 
 
 def test_must_items_survive_aggressive_culling(session: Session) -> None:
@@ -513,7 +534,8 @@ def test_second_replan_does_not_resurrect_culled_items(session: Session) -> None
     plan = repo.load_active_plan(session, USER_ID)
     assert plan is not None
 
-    # 製造出可砍的加分項目（真實題庫排出來全是必學）。
+    # 刻意把後半段壓成加分項目：真實題庫也排得出 bonus，但位置會隨題庫變動，
+    # 而這一支要的是「可重現地剛好砍掉某一批」，所以自己擺局。
     ordered = sorted(plan.items, key=lambda i: (i.scheduled_date, i.order_in_day))
     for row in ordered[len(ordered) // 2 :]:
         row.priority = TIER_BONUS

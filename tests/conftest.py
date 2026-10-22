@@ -13,12 +13,15 @@ from __future__ import annotations
 import csv
 import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+TOPICS_PATH = PROJECT_ROOT / "data" / "topics.yaml"
+TASKS_PATH = PROJECT_ROOT / "data" / "tasks.csv"
 
 # 必須在任何 db.session 的 import 之前執行。
 _TMP_DIR = tempfile.mkdtemp(prefix="study-planner-test-")
@@ -75,3 +78,66 @@ def seeded_app_db() -> Path:
             session.commit()
 
     return _TEST_DB
+
+
+def seed_global_data(session) -> None:
+    """灌入真實的 ``topics.yaml`` 與 ``tasks.csv``（全域資料，不含使用者）。
+
+    刻意**不建** ``users`` 那一列：匯出與刪除的測試要自己控制帳號在不在，
+    否則「查不到人要拋錯」那一條根本測不到。
+    """
+    from db.models import Task, Topic
+
+    for row in yaml.safe_load(TOPICS_PATH.read_text(encoding="utf-8")):
+        session.add(
+            Topic(
+                id=row["id"],
+                name=row["name"],
+                base_weight=int(row["base_weight"]),
+                prereq=list(row.get("prereq") or []),
+                key_points=list(row.get("key_points") or []),
+            )
+        )
+    with TASKS_PATH.open(encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            session.add(
+                Task(
+                    source=row["source"],
+                    title=row["title"],
+                    url=row["url"],
+                    topic_id=row["topic"],
+                    prereq=row["prereq"] or None,
+                    difficulty=row["difficulty"],
+                    est_minutes=int(row["est_minutes"]),
+                    static_note=row["static_note"] or None,
+                )
+            )
+    session.flush()
+
+
+@pytest.fixture
+def db_session(tmp_path: Path) -> Iterator["object"]:
+    """每個測試一個乾淨的暫存資料庫，已灌好全域資料、沒有使用者。
+
+    **外鍵檢查必須打開。** 刪除順序的測試完全依賴它：關掉的話順序寫錯
+    只會留下指向空氣的孤兒列，測試照樣全綠——那正是這組測試要防的事。
+    """
+    from sqlalchemy import create_engine, event
+    from sqlalchemy.orm import sessionmaker
+
+    from db.models import Base
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'user-data.db'}", future=True)
+
+    @event.listens_for(engine, "connect")
+    def _fk_on(dbapi_connection, _record):  # noqa: ANN001
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
+    with factory() as session:
+        seed_global_data(session)
+        session.commit()
+        yield session

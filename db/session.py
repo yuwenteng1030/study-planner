@@ -1,7 +1,7 @@
 """資料庫連線與 session 工廠。
 
 這裡是「換資料庫只改一層」的其中一半：連線字串集中在這個檔案，
-查詢語句集中在 ``db/repositories/``。之後換 PostgreSQL 時，
+查詢語句集中在 ``db/repositories.py``。之後換 PostgreSQL 時，
 把 ``DATABASE_URL`` 換掉就好，上層程式不動。
 """
 

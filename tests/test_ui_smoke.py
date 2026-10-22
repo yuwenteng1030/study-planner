@@ -18,6 +18,7 @@ from streamlit.testing.v1 import AppTest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 HOME = str(PROJECT_ROOT / "app" / "Home.py")
 TODAY_PAGE = str(PROJECT_ROOT / "app" / "pages" / "1_今日任務.py")
+DATA_PAGE = str(PROJECT_ROOT / "app" / "pages" / "2_我的資料.py")
 
 TIMEOUT = 60
 
@@ -82,6 +83,37 @@ def test_checking_a_task_marks_it_done(seeded_app_db) -> None:
     assert after.progress[1].value > before, "整體進度應該前進"
 
 
+def test_progress_moves_in_the_same_run_as_the_click(seeded_app_db) -> None:
+    """打勾之後，**不重開頁面**，上面的進度條就要跟著動。
+
+    上一支測試看起來測的是同一件事，其實不是：它在斷言之前用
+    ``AppTest.from_file(...)`` 重開了一次頁面，等於使用者按了重新整理。
+    重開當然讀得到新的狀態，所以「進度條永遠慢一拍」這個 bug 躲得過它。
+
+    真正的 bug 長這樣：``_show_progress`` 在項目迴圈**之前**就畫完了，
+    而寫入資料庫發生在迴圈**裡面**。Streamlit 在 widget 變動時只重跑一次腳本，
+    所以那一輪畫出來的進度，是這次點擊**之前**的狀態——卡片的刪除線立刻更新
+    （它在寫入之後才算 ``done``），但上面的「今天 n / m 題」停在舊數字。
+    使用者打完一題，看到的是沒動的進度條。
+    """
+    home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    home.number_input[0].set_value(10)
+    home.number_input[1].set_value(1.0)
+    home.button[0].click().run()
+    assert not home.exception
+
+    page = AppTest.from_file(TODAY_PAGE, default_timeout=TIMEOUT).run()
+    assert page.checkbox, "今天應該有可以打勾的任務"
+    before = page.progress[1].value
+
+    page.checkbox[0].set_value(True).run()
+    assert not page.exception, [str(e.value) for e in page.exception]
+
+    assert page.progress[1].value > before, (
+        "打勾後進度條沒有在同一輪更新——使用者要按重新整理才看得到自己的進度"
+    )
+
+
 def test_overlapping_self_assessment_is_rejected(seeded_app_db) -> None:
     """同一主題同時選「已熟」和「沒學過」要被擋下來，不能默默取其一。"""
     app = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
@@ -108,9 +140,14 @@ def test_impossible_daily_minutes_is_reported(seeded_app_db) -> None:
 def test_every_goal_preset_produces_a_plan(seeded_app_db, preset_index: int) -> None:
     """每個目標選項都要排得出計畫。
 
-    「進階演算法」特別容易出事：它指向的 trees／graphs／dp 目前**一題都沒有**，
-    所以 goal_factor 全加在沒有題目的主題上。計畫還是該排得出來
-    （用其他主題的題目），不能變成空白頁或例外。
+    「進階演算法」特別容易出事：它指向 trees／graphs／dp／tries，這些主題的
+    base_weight 偏低（2–6），所以 goal_factor ×1.3 之後仍可能整批落在建議層
+    或加分層，而每日容量會先被必學層吃掉。計畫還是該排得出來，
+    不能變成空白頁或例外。
+
+    （2026-10-22 之前這一支防的是更基本的狀況：那時 trees／graphs／dp
+    一題都沒有，goal_factor 全加在空主題上。題庫補齊後那個情境消失了，
+    但「選了這一項會不會排出空計畫」仍然值得守著。）
     """
     app = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
     app.selectbox[0].select_index(preset_index).run()
@@ -120,3 +157,112 @@ def test_every_goal_preset_produces_a_plan(seeded_app_db, preset_index: int) -> 
 
     assert not app.exception, [str(e.value) for e in app.exception]
     assert app.success, f"第 {preset_index} 個目標選項排不出計畫"
+
+
+# ---------------------------------------------------------------------------
+# 我的資料（匯出／刪除）
+#
+# 這一組放在檔案最後，因為最後一支測試會把共用的測試資料庫清空。
+# ``seeded_app_db`` 是 session scope，所以**不要**在這之後再加需要既有計畫的
+# UI 測試；要加的話加在這個區塊上面。
+# ---------------------------------------------------------------------------
+
+
+def test_data_page_renders(seeded_app_db) -> None:
+    app = AppTest.from_file(DATA_PAGE, default_timeout=TIMEOUT).run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+    assert app.download_button, "應該有下載按鈕"
+
+
+def test_data_page_works_on_a_brand_new_account(seeded_app_db) -> None:
+    """沒有任何計畫時也不能炸，下載鍵也要還在。
+
+    「我要帶走我的資料」不該因為資料是空的就壞掉。
+    """
+    app = AppTest.from_file(DATA_PAGE, default_timeout=TIMEOUT).run()
+    assert not app.exception
+    assert app.metric, "應該顯示統計數字"
+
+
+def test_export_download_is_valid_json(seeded_app_db) -> None:
+    """下載鍵裡的內容要是能解析的 JSON。
+
+    這是整頁唯一真正的產出。只檢查「有這顆按鈕」會漏掉最可能出錯的事：
+    日期欄位沒轉成字串，使用者按下去的那一刻才炸。
+    """
+    home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    home.number_input[0].set_value(10)
+    home.number_input[1].set_value(1.0)
+    home.button[0].click().run()
+    assert not home.exception
+
+    app = AppTest.from_file(DATA_PAGE, default_timeout=TIMEOUT).run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+
+    # 頁面會把同一份 JSON 顯示在 expander 的 st.code 裡，從那裡取前綴來驗。
+    assert app.code, "應該有預覽區塊"
+    preview = app.code[0].value
+    assert preview.lstrip().startswith("{")
+    assert '"format_version"' in preview
+    assert '"plans"' in preview
+
+
+def test_delete_without_typing_the_confirm_word_does_nothing(seeded_app_db) -> None:
+    """沒輸入確認字串就按下去，不能刪掉任何東西。
+
+    畫面上的 ``disabled`` 是前端狀態，不是把關。這一支測的是伺服器端那一道
+    檢查——不可還原的動作不能只靠一個 disabled 屬性守著。
+    """
+    home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    home.number_input[0].set_value(10)
+    home.number_input[1].set_value(1.0)
+    home.button[0].click().run()
+    assert not home.exception
+
+    app = AppTest.from_file(DATA_PAGE, default_timeout=TIMEOUT).run()
+    before = app.metric[0].value
+    app.button[0].click().run()  # 不填確認字串就按「清除紀錄」
+
+    assert not app.exception, [str(e.value) for e in app.exception]
+    assert not app.success, "沒確認就不該出現「已刪除」"
+    assert app.error, "應該明確說沒有刪除任何資料"
+    assert "沒有刪除" in app.error[0].value
+
+    # 計畫數量要一模一樣。比對前後的值，不寫死數字——這個測試資料庫是
+    # 整個檔案共用的，累積了前面每一支測試排出的計畫。
+    after = AppTest.from_file(DATA_PAGE, default_timeout=TIMEOUT).run()
+    assert after.metric[0].value == before, f"資料被動到了：{before} → {after.metric[0].value}"
+    assert after.metric[0].value != "0 份", "前提不成立：本來就沒有資料可以刪"
+
+
+def test_clearing_records_through_the_page(seeded_app_db) -> None:
+    """輸入確認字串 → 按鍵 → 紀錄真的被刪掉，而且頁面不炸。
+
+    **這一支會把共用的測試資料庫清空**，所以它排在這個檔案的最後。
+    """
+    home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    home.number_input[0].set_value(10)
+    home.number_input[1].set_value(1.0)
+    home.button[0].click().run()
+    assert not home.exception
+
+    app = AppTest.from_file(DATA_PAGE, default_timeout=TIMEOUT).run()
+    app.text_input[0].set_value("清除紀錄").run()
+    app.button[0].click().run()
+
+    assert not app.exception, [str(e.value) for e in app.exception]
+    assert app.success, "應該回報刪了多少東西"
+    assert "已刪除" in app.success[0].value
+
+    # 重開這一頁：計畫歸零，頁面照樣跑得起來。
+    after = AppTest.from_file(DATA_PAGE, default_timeout=TIMEOUT).run()
+    assert not after.exception, [str(e.value) for e in after.exception]
+    assert after.metric[0].value == "0 份"
+
+    # 刪完之後還要能再排一份新計畫——這才是「乾淨的新開始」。
+    again = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    again.number_input[0].set_value(10)
+    again.number_input[1].set_value(1.0)
+    again.button[0].click().run()
+    assert not again.exception, [str(e.value) for e in again.exception]
+    assert again.success

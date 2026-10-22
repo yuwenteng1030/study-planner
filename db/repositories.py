@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from core.planner import Plan as CorePlan
 from core.planner import ScheduledItem, TaskInput, TopicNode
 from core.replanner import Replan
 from core.scoring import UserContext
-from db.models import Plan, PlanItem, ProgressEvent, Task, Topic
+from db.models import Plan, PlanItem, ProgressEvent, Task, Topic, User
 
 #: ``parsed_goal`` JSON 裡放自評程度的鍵。
 #:
@@ -331,4 +331,205 @@ def progress_summary(plan: Plan, today: _dt.date) -> dict:
         "overall_ratio": ratio(overall_done, overall_total),
         "today_minutes": sum(i.task.est_minutes for i in today_items),
         "skipped": sum(1 for i in plan.items if i.status == "skipped"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 使用者資料的匯出與刪除
+# ---------------------------------------------------------------------------
+#
+# 這一組函式是「最終目標是開放給其他人用」的最低義務：使用者要能把自己的
+# 紀錄帶走，也要能把它刪乾淨。兩件事都放在 repository 層，是因為它們牽涉
+# 多張表的刪除順序——那是 db/ 的知識，不該漏到 app/ 去。
+
+#: 匯出檔的格式版本。之後欄位有增減時靠這個數字判斷怎麼讀。
+EXPORT_FORMAT_VERSION = 1
+
+#: 帳號被刪掉後重建時用的預設值。與 ``scripts/import_data.py`` 的 SEED_USER 一致。
+_FALLBACK_EMAIL = "owner@localhost"
+_FALLBACK_DISPLAY_NAME = "我"
+
+
+def ensure_user(session: Session, user_id: int) -> User:
+    """取得使用者；不存在就建一個空帳號。
+
+    為什麼需要這支：v0.1 沒有登入，``get_current_user()`` 永遠回傳 1。
+    使用者刪掉帳號之後那一列就不見了，但下次打開網頁 ``user_id`` 還是 1，
+    於是 ``create_plan`` 會因為外鍵指不到人而炸掉——使用者會看到一個
+    壞掉的網站，而不是一個乾淨的新開始。
+
+    所以單人模式下「刪除帳號」的語意是**回到全新狀態**，不是「從此不能用」。
+    接上登入之後這支函式就該換成「找不到人就導去登入頁」。
+    """
+    user = session.get(User, user_id)
+    if user is not None:
+        return user
+    user = User(
+        id=user_id,
+        # email 是 NOT NULL + UNIQUE，必須給值。單人模式下沒有真的信箱可填。
+        email=_FALLBACK_EMAIL if user_id == 1 else f"user{user_id}@localhost",
+        display_name=_FALLBACK_DISPLAY_NAME,
+    )
+    session.add(user)
+    session.flush()
+    return user
+
+
+def export_user_data(session: Session, user_id: int) -> dict:
+    """把一位使用者的全部學習紀錄匯出成可直接 ``json.dumps`` 的 dict。
+
+    包含**所有**計畫，不只進行中的那一份：已收起來（``archived``）的計畫
+    也是使用者的紀錄，匯出時漏掉它們等於匯出了一份殘缺的資料。
+    被移出計畫的項目（``skipped``）同理保留。
+
+    日期一律轉成 ISO 字串，``json.dumps`` 才吃得下。
+
+    不含 ``topics`` 與 ``tasks`` 兩張全域表——那是網站的題庫，不是使用者的
+    資料。但每一項會帶上題目的標題、網址與難度快照，否則匯出檔只剩一串
+    ``task_id``，離開這個資料庫就讀不懂了。
+
+    Raises:
+        LookupError: 使用者不存在。沉默地回傳空資料會讓使用者以為
+            「我的紀錄真的是空的」，而實際上是查錯了人。
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        raise LookupError(f"user_id={user_id} 不存在")
+
+    plans = session.scalars(
+        select(Plan)
+        .where(Plan.user_id == user_id)
+        .order_by(Plan.id)
+        .options(selectinload(Plan.items).selectinload(PlanItem.task))
+    ).all()
+
+    events = session.scalars(
+        select(ProgressEvent)
+        .where(ProgressEvent.user_id == user_id)
+        .order_by(ProgressEvent.id)
+    ).all()
+
+    return {
+        "format_version": EXPORT_FORMAT_VERSION,
+        "exported_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "daily_api_quota": user.daily_api_quota,
+            "created_at": _iso(user.created_at),
+        },
+        "plans": [
+            {
+                "id": plan.id,
+                "goal_text": plan.goal_text,
+                "parsed_goal": plan.parsed_goal,
+                "start_date": _iso(plan.start_date),
+                "days": plan.days,
+                "daily_minutes": plan.daily_minutes,
+                "level": plan.level,
+                "status": plan.status,
+                "created_at": _iso(plan.created_at),
+                "items": [
+                    {
+                        "id": item.id,
+                        "task_id": item.task_id,
+                        "task_title": item.task.title,
+                        "task_url": item.task.url,
+                        "topic_id": item.task.topic_id,
+                        "difficulty": item.task.difficulty,
+                        "est_minutes": item.task.est_minutes,
+                        "scheduled_date": _iso(item.scheduled_date),
+                        "order_in_day": item.order_in_day,
+                        "priority": item.priority,
+                        "status": item.status,
+                        "done_at": _iso(item.done_at),
+                        "actual_minutes": item.actual_minutes,
+                        "reason": item.reason,
+                        "key_points": list(item.key_points or ()),
+                    }
+                    for item in sorted(
+                        plan.items, key=lambda i: (i.scheduled_date, i.order_in_day)
+                    )
+                ],
+            }
+            for plan in plans
+        ],
+        "progress_events": [
+            {
+                "id": event.id,
+                "plan_id": event.plan_id,
+                "item_id": event.item_id,
+                "event": event.event,
+                "created_at": _iso(event.created_at),
+                "payload": event.payload,
+            }
+            for event in events
+        ],
+    }
+
+
+def _iso(value: _dt.date | _dt.datetime | None) -> str | None:
+    """日期轉 ISO 字串；``None`` 原樣保留。"""
+    return None if value is None else value.isoformat()
+
+
+def delete_user_data(
+    session: Session, user_id: int, *, drop_account: bool = False
+) -> dict[str, int]:
+    """刪掉一位使用者的學習紀錄；``drop_account`` 時連帳號那一列一起刪。
+
+    **刪除順序是這支函式存在的主要理由。** 現在的 schema 沒辦法只刪 ``users``
+    那一列就了事：
+
+    * ``User.plans`` 這條 relationship **沒有** cascade，而 ``plans.user_id``
+      是 NOT NULL，所以 ORM 想把它設成 NULL 會失敗。
+    * ``progress_events`` 的 ``plan_id`` 指向 ``plans``、``item_id`` 指向
+      ``plan_items``，而它完全沒有被任何 cascade 覆蓋到。
+    * SQLite 的外鍵檢查是開著的（``db/session.py`` 的 ``PRAGMA foreign_keys=ON``），
+      所以順序錯了會直接撞外鍵，不會默默留下指向空氣的孤兒列。
+
+    因此順序固定是 ``progress_events`` → ``plan_items`` → ``plans`` → ``users``，
+    由裡往外。這裡刻意用 bulk delete 而不是逐列 ``session.delete()``：
+    bulk delete 不觸發 ORM cascade，刪什麼完全由上面這個順序決定，
+    不會因為以後有人在 model 上加了一條 cascade 就悄悄改變行為。
+    代價是 ORM 的 identity map 裡還握著已經被刪掉的物件，所以結束前要
+    ``expire_all()``，否則同一個 session 之後讀到的是幽靈資料。
+
+    Returns:
+        每張表實際刪掉幾列。回傳數量而不是 ``None``，是為了讓畫面能說
+        「刪掉了 3 份計畫、48 個項目」——使用者才知道這個按鈕真的做了事。
+    """
+    plan_ids = list(session.scalars(select(Plan.id).where(Plan.user_id == user_id)))
+
+    # 1. progress_events：兩個條件都查。user_id 與 plan_id 理論上一致，
+    #    但這是刪除路徑，寧可多刪自己的資料，也不要留下撞外鍵的孤兒列。
+    event_filter = ProgressEvent.user_id == user_id
+    if plan_ids:
+        event_filter = event_filter | ProgressEvent.plan_id.in_(plan_ids)
+    deleted_events = session.execute(delete(ProgressEvent).where(event_filter)).rowcount
+
+    # 2. plan_items
+    deleted_items = (
+        session.execute(delete(PlanItem).where(PlanItem.plan_id.in_(plan_ids))).rowcount
+        if plan_ids
+        else 0
+    )
+
+    # 3. plans
+    deleted_plans = session.execute(delete(Plan).where(Plan.user_id == user_id)).rowcount
+
+    # 4. users（只有明確要求時）
+    deleted_users = (
+        session.execute(delete(User).where(User.id == user_id)).rowcount
+        if drop_account
+        else 0
+    )
+
+    session.expire_all()
+    return {
+        "progress_events": deleted_events,
+        "plan_items": deleted_items,
+        "plans": deleted_plans,
+        "users": deleted_users,
     }

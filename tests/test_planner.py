@@ -5,7 +5,7 @@
   2. 每天總分鐘數 ≤ 上限
 
 另外加測三件沒寫在驗收標準裡、但會實際出錯的事：
-  3. 沒有題目的主題不能阻擋它的後置主題（題庫只覆蓋 8/21 個主題）
+  3. 沒有題目的主題不能阻擋它的後置主題（``time_complexity`` 刻意維持零題目）
   4. 同樣的輸入要排出同樣的計畫
   5. 題庫塞不下時要有東西被淘汰，而且淘汰的理由要能說出來
 """
@@ -19,8 +19,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from core.planner import TaskInput, TopicNode, build_plan
-from core.scoring import TIER_MUST, UserContext
+from core.planner import TaskInput, TopicNode, _topic_order, build_plan
+from core.scoring import TIER_MUST, TopicInput, UserContext, rank_topics
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TOPICS_PATH = PROJECT_ROOT / "data" / "topics.yaml"
@@ -253,39 +253,77 @@ def test_high_score_topics_win_the_limited_capacity(
     )
 
 
-def test_zero_cost_topic_does_not_starve_its_dependents(
+def test_zero_cost_topic_does_not_delay_its_dependents(
     topics: list[TopicNode], tasks: list[TaskInput]
 ) -> None:
-    """沒有題目的主題不能把它的高分後置主題卡到天數用完。
+    """沒有題目的主題不能把它的高分後置主題往後推。
 
     這是實際踩過的 bug，不是假想案例。``sorting``（8 分）的前置
     ``time_complexity`` 一題都沒有、分數 7；原本讓它按分數跟別人競爭，
     它就輸給同樣 7 分的 ``stacks_queues``，連帶讓 ``sorting`` 與
     ``greedy``（都是 8 分）整個排不進計畫——7 分的排到了，8 分的沒排到。
 
-    所以這裡直接斷言：只要有任何 7 分主題排進計畫，8 分主題就不能掛零。
+    斷言的對象是**主題順序**，不是排進去的題數。
+
+    原本這一支斷言的是「8 分主題不能掛零」。題庫從 8 個主題擴到 20 個之後
+    那個寫法失效了，而且不是因為 bug 回來了：21 個主題、122 題擠 600 分鐘，
+    最後一定會剩下一小塊容量（實測 45 分鐘），而填得進去的只有最便宜的那一題
+    ——``linked_lists`` 的 10 分鐘題。於是「掛零的主題一定比排進去的都重要」
+    這句話就不可能成立，但它不成立的原因是裝箱的零頭，不是前置擋路。
+
+    順序才是 ``_topic_order`` 真正控制的東西，而且不受容量影響：
+    ``sorting`` 與 ``greedy`` 之前不准出現任何「有題目、而且更不重要」的主題。
     """
-    plan = build_plan(topics, tasks, START, days=10, daily_minutes=60)
-    scheduled_ids = {i.task_id for i in plan.items}
-
-    topics_with_tasks = {t.topic_id for t in tasks}
-    scheduled_count = {
-        tid: sum(1 for t in tasks if t.topic_id == tid and t.id in scheduled_ids)
-        for tid in topics_with_tasks
-    }
     by_weight = {t.id: t.base_weight for t in topics}
-
-    starved = {
-        tid for tid, count in scheduled_count.items() if count == 0
-    }
-    served_weights = [
-        by_weight[tid] for tid, count in scheduled_count.items() if count > 0
-    ]
-    for tid in starved:
-        assert all(w >= by_weight[tid] for w in served_weights), (
-            f"{tid}（base_weight {by_weight[tid]}）一題都沒排到，"
-            f"卻有比它更不重要的主題排進去了"
+    has_tasks = {t.topic_id for t in tasks}
+    scores = {
+        r.topic_id: r.score
+        for r in rank_topics(
+            [
+                TopicInput(id=t.id, name=t.name, base_weight=t.base_weight)
+                for t in topics
+            ],
+            None,
+            None,
         )
+    }
+    order = _topic_order(topics, scores, has_tasks)
+
+    for victim in ("sorting", "greedy"):
+        ahead = order[: order.index(victim)]
+        queue_jumpers = [
+            tid
+            for tid in ahead
+            if tid in has_tasks and by_weight[tid] < by_weight[victim]
+        ]
+        assert not queue_jumpers, (
+            f"{victim}（base_weight {by_weight[victim]}）被 {queue_jumpers} 插隊——"
+            "零成本的前置節點又開始擋路了"
+        )
+
+
+def test_time_complexity_stays_task_free(tasks: list[TaskInput]) -> None:
+    """``time_complexity`` 不能有題目——這條限制是上一支測試的前提。
+
+    ``_topic_order`` 把「沒有題目的主題」當透明節點優先放行，所以
+    ``time_complexity``（7 分）才不會卡住它的後置 ``sorting``／``greedy``（都 8 分）。
+    一旦給它題目，它就變成要按分數競爭的普通節點，於是輸給同樣 7 分的
+    ``stacks_queues``，``sorting`` 從第 5 位掉到第 7 位、``greedy`` 第 6 掉到第 8——
+    600 分鐘的計畫就排不到它們了。**那個 bug 不是被修掉，是被「它沒有題目」擋著。**
+
+    這不是假設：擴充題庫時真的把 ``Time Complexity: Primality`` 與 ``Is Fibo``
+    放進 ``time_complexity``，這一組測試立刻紅。兩題後來改掛
+    ``math_number_theory``（質數判斷與費氏數本來就是數論題），
+    ``time_complexity`` 維持成只有 ``key_points`` 的觀念節點。
+
+    要改掉這條限制，得先改 ``_topic_order`` 的排序規則
+    （例如「高分主題的前置跟著它一起提前」），那是評分與排程邏輯的決策，
+    不是資料檔的決策。所以這裡擋在資料檔這一層，讓它大聲壞掉。
+    """
+    assert not [t for t in tasks if t.topic_id == "time_complexity"], (
+        "time_complexity 被塞了題目。請看這支測試的說明："
+        "它會讓 sorting 與 greedy 排不進計畫。"
+    )
 
 
 def test_real_data_has_no_contradictory_prereqs(

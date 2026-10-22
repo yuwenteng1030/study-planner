@@ -67,15 +67,30 @@ def main() -> None:
             key=lambda i: i.order_in_day,
         )
 
-        _show_progress(summary, plan, end_date, today)
+        # 進度條在版面上要留在最上面，但它的數字是**項目迴圈跑完之後**才正確的：
+        # 打勾的寫入發生在 ``_render_item`` 裡面，而 Streamlit 在 widget 變動時
+        # 只重跑一次腳本。照順序畫的話，這一輪畫出來的是點擊**之前**的狀態——
+        # 卡片的刪除線立刻更新（它在寫入之後才算 ``done``），上面的「今天 n / m 題」
+        # 卻停在舊數字，使用者得按一次重新整理才看得到自己剛完成的那一題。
+        # ``st.container()`` 先把位置佔下來，迴圈之後再往裡面畫：版面順序不變，
+        # 數字是這一輪最新的。不用 ``st.rerun()`` 的理由見 ``_render_item``。
+        progress_slot = st.container()
 
         if not today_items:
+            with progress_slot:
+                _show_progress(summary, plan, end_date, today)
             _show_empty_day(plan, today, end_date)
             return
 
         st.subheader(f"{today:%m/%d}（{summary['today_minutes']} 分鐘）")
         for item in today_items:
             _render_item(session, item)
+
+        with progress_slot:
+            # 重新算一次，不要沿用迴圈之前的 ``summary``。
+            # ``progress_summary`` 讀的是記憶體裡的 ``plan.items``，
+            # 所以這裡拿到的是這一輪打勾之後的狀態。
+            _show_progress(repo.progress_summary(plan, today), plan, end_date, today)
 
         _show_upcoming(plan, today)
 
@@ -134,7 +149,10 @@ def _render_item(session, item) -> None:
     （這個 bug 是 UI 冒煙測試抓到的：``pytest`` 全綠、伺服器回 200、
     log 也乾淨，只有真的去點那個 checkbox 才會發現。）
 
-    不需要 rerun 也沒差：Streamlit 本來就會在 widget 變動時重跑整個腳本。
+    代價是：這一輪的畫面順序與寫入順序不一致（widget 變動只重跑一次腳本，
+    畫面上在迴圈之前的東西會早於寫入被畫出來）。所以需要「寫入之後的數字」的
+    區塊，必須自己用 ``st.container()`` 把版面位置先佔下來、迴圈之後再畫——
+    ``main()`` 的 ``progress_slot`` 就是為此存在的。
     """
     task = item.task
     icon = TIER_ICON.get(item.priority, "")
