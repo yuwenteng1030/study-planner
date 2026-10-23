@@ -20,7 +20,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.deps import get_current_user  # noqa: E402
+from api.deps import get_current_user, show_demo_notice  # noqa: E402
 from core.goals import GOAL_PRESETS  # noqa: E402
 from core.planner import build_plan  # noqa: E402
 from core.scoring import JDStats, UserContext  # noqa: E402
@@ -39,6 +39,7 @@ DEFAULT_HOURS = 1.0
 
 
 def main() -> None:
+    show_demo_notice()
     st.title("🗺️ 學習計畫")
     st.caption(
         "填三個條件，排出每天該做哪幾題，並說明每一項為什麼值得做。"

@@ -21,7 +21,7 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.deps import get_current_user  # noqa: E402
+from api.deps import get_current_user, show_demo_notice  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from core.game_map import (  # noqa: E402
     FOCUS_ZONE_NAMES,
@@ -380,6 +380,7 @@ def _on_map_action() -> None:
 
 
 def main() -> None:
+    show_demo_notice()
     st.title("🗺️ 學習地圖")
     st.caption(
         "一關＝一題，從最下面的起點往上走。點關卡會在新分頁打開 HackerRank 的題目；"

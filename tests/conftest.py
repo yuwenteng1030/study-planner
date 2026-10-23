@@ -92,9 +92,11 @@ def seeded_app_db() -> Path:
                             focus_stage=int(row["focus"]) if row.get("focus") else None,
                         )
                     )
-            session.add(
-                User(id=1, email="ui-test@example.com", display_name="UI 測試")
-            )
+            session.commit()
+        # 使用者另外判斷：第一次開交易時 db.session 會自動匯入題庫（不含使用者），
+        # 別的測試先碰過資料庫的話，上面那段會被跳過
+        if session.get(User, 1) is None:
+            session.add(User(id=1, email="ui-test@example.com", display_name="UI 測試"))
             session.commit()
 
     return _TEST_DB

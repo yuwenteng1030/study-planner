@@ -17,7 +17,7 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.deps import get_current_user  # noqa: E402
+from api.deps import get_current_user, show_demo_notice  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.quota import DbLedger  # noqa: E402
@@ -80,6 +80,7 @@ def _flush_cheers() -> None:
 
 
 def main() -> None:
+    show_demo_notice()
     st.session_state.pop(PENDING_CHEERS_KEY, None)
     _render_page()
     # 交易已經 commit 才問 Claude；_render_page 出錯（交易 rollback）就不恭喜，

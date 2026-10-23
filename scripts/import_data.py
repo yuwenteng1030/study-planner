@@ -105,8 +105,13 @@ def _check_task_urls(tasks: list[dict]) -> None:
             )
 
 
-def import_all(reset: bool = False) -> dict[str, int]:
-    """匯入主題與題庫，回傳各表的筆數。"""
+def upsert_catalog(session) -> None:  # noqa: ANN001
+    """在給定的交易裡把主題與題庫寫進資料庫（以 ``topics.id``／``tasks.url`` 做 upsert）。
+
+    不碰使用者資料，也不建表——呼叫端負責 schema 已經是最新的。
+    ``db/session.py`` 第一次開交易時會用它把空資料庫補上題庫：部署到新機器或剛 clone 下來，
+    打開網頁就能用，不必先記得跑這支腳本。
+    """
     topics = load_topics()
     tasks = load_tasks()
     _check_topic_graph(topics)
@@ -118,6 +123,48 @@ def import_all(reset: bool = False) -> dict[str, int]:
     if unknown:
         raise ValueError(f"tasks.csv 用到地圖上沒有的主題：{sorted(unknown)}")
 
+    # --- 主題 ---
+    for row in topics:
+        topic = session.get(Topic, row["id"])
+        values = {
+            "name": row["name"],
+            "domain": row.get("domain", "python"),
+            "base_weight": int(row["base_weight"]),
+            "prereq": list(row.get("prereq") or []),
+            "key_points": list(row.get("key_points") or []),
+        }
+        if topic is None:
+            session.add(Topic(id=row["id"], **values))
+        else:
+            for key, value in values.items():
+                setattr(topic, key, value)
+
+    session.flush()
+
+    # --- 題庫 ---
+    for row in tasks:
+        url = row["url"].strip()
+        task = session.scalar(select(Task).where(Task.url == url))
+        values = {
+            "source": row["source"].strip(),
+            "title": row["title"].strip(),
+            "topic_id": row["topic"].strip(),
+            "prereq": (row.get("prereq") or "").strip() or None,
+            "difficulty": row["difficulty"].strip(),
+            "est_minutes": int(row["est_minutes"]),
+            "static_note": (row.get("static_note") or "").strip() or None,
+            "focus_stage": int(row["focus"]) if (row.get("focus") or "").strip() else None,
+        }
+        if task is None:
+            session.add(Task(url=url, **values))
+        else:
+            for key, value in values.items():
+                setattr(task, key, value)
+    session.flush()
+
+
+def import_all(reset: bool = False) -> dict[str, int]:
+    """匯入主題與題庫，回傳各表的筆數。"""
     if reset:
         Base.metadata.drop_all(get_engine())
         # 版本表也要清掉，否則 Alembic 以為已經是最新版，什麼表都不建
@@ -126,47 +173,9 @@ def import_all(reset: bool = False) -> dict[str, int]:
     init_db()
 
     with session_scope() as session:
-        # --- 使用者 ---
         if session.get(User, SEED_USER["id"]) is None:
             session.add(User(**SEED_USER))
-
-        # --- 主題 ---
-        for row in topics:
-            topic = session.get(Topic, row["id"])
-            values = {
-                "name": row["name"],
-                "domain": row.get("domain", "python"),
-                "base_weight": int(row["base_weight"]),
-                "prereq": list(row.get("prereq") or []),
-                "key_points": list(row.get("key_points") or []),
-            }
-            if topic is None:
-                session.add(Topic(id=row["id"], **values))
-            else:
-                for key, value in values.items():
-                    setattr(topic, key, value)
-
-        session.flush()
-
-        # --- 題庫 ---
-        for row in tasks:
-            url = row["url"].strip()
-            task = session.scalar(select(Task).where(Task.url == url))
-            values = {
-                "source": row["source"].strip(),
-                "title": row["title"].strip(),
-                "topic_id": row["topic"].strip(),
-                "prereq": (row.get("prereq") or "").strip() or None,
-                "difficulty": row["difficulty"].strip(),
-                "est_minutes": int(row["est_minutes"]),
-                "static_note": (row.get("static_note") or "").strip() or None,
-                "focus_stage": int(row["focus"]) if (row.get("focus") or "").strip() else None,
-            }
-            if task is None:
-                session.add(Task(url=url, **values))
-            else:
-                for key, value in values.items():
-                    setattr(task, key, value)
+        upsert_catalog(session)
 
     with session_scope() as session:
         return {

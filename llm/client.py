@@ -56,9 +56,18 @@ class Explanation:
         return self.source == "llm"
 
 
+#: 展示版要不要呼叫 Claude。預設不要：訪客帳號重新整理就換一個，每人的每日額度擋不住
+#: 一直重新整理的人，帳單會算在部署者頭上。真的要開，由部署者在 secrets 明確設定。
+DEMO_LLM_ENV = "STUDY_PLANNER_DEMO_LLM"
+
+
 def is_available() -> bool:
-    """有沒有 API key。沒有就全程走備援，不會拋錯。"""
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    """有沒有 API key（展示版還要明確允許）。沒有就全程走備援，不會拋錯。"""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return False
+    from api.deps import is_demo
+
+    return not is_demo() or os.environ.get(DEMO_LLM_ENV, "").strip() == "1"
 
 
 def explain_task(

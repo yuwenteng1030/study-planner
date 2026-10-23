@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，323 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，335 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -90,6 +90,8 @@ Streamlit (app/)  →  core/  →  db/repositories.py  →  SQLite
 
 **代價**：現在看起來像沒用的抽象。開放登入時只需要改那一支函式加一個登入頁。
 
+**驗證過一次**（2026-10-24）：公開展示版要讓每位訪客各自一個帳號，改的就是 `get_current_user()`——身分改從 `st.session_state` 讀，頁面與查詢一行都沒動。見設計決策 13。
+
 ### 5. LLM 掛掉，功能不能減
 
 Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額度用完、呼叫失敗，都回退到 `tasks.static_note` 預存的句子。使用者看到的差別只是文字從客製變罐頭——計畫照排、進度照記。完成一題時的鼓勵訊息也是同一條規則：Claude 寫不出來就用 `core/encouragement.py` 的範本。
@@ -155,6 +157,17 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 
 **代價**：前置會跟高分後置同分，可能排在本身更高分、但沒有高分後置的主題前面。同一個情境裡，換到 `graphs` 的代價是 `dp_1d`、`dp_2d`（也是目標主題）從計畫裡消失，`math_number_theory`、`hashmaps`、`strings` 的題數也變少——容量是固定的，提前一條鏈就有別的被擠掉。同分時用自己的分數決勝，所以高分後置一解鎖就緊接著排。另外，這條規則不會讓「沒標熟」的初學者計畫跳過基礎：目標權重只有 ×1.3，推不過 `base_weight` 8 以上的基礎主題，這是刻意的（同設計決策 2：權重只重排同級，不顛覆基本盤）。
 
+### 13. 公開展示版：每個分頁一個訪客帳號，不呼叫 Claude
+
+部署成公開網址後，單人模式的 `user_id=1` 會變成所有人共用一份資料：甲排的計畫乙看得到，乙按「刪除帳號」會刪掉甲的進度。所以 `STUDY_PLANNER_DEMO=1` 時，每個瀏覽器分頁拿到一個訪客帳號（`db/demo.py`），一打開就有一份進行到第 4 天的範例計畫：前幾天做完、昨天漏了一題，所以「今日任務」第一眼就看得到落後重排，地圖、回顧頁、估時校正也都有資料。
+
+- **訪客 id 只放在伺服器端的 `session_state`，不放網址**：放網址的話，把網址貼給別人就等於把帳號交出去。代價是重新整理頁面會換一個新訪客。
+- **訪客帳號 12 小時後刪掉**，在有新訪客進來時順手清，資料庫不會一直長大。信箱用 RFC 2606 保留的 `.invalid` 網域，清理只認這個網域，單人模式的帳號再舊也不會被刪。
+- **展示版預設不呼叫 Claude**，就算部署時設了 `ANTHROPIC_API_KEY`：訪客重新整理就換帳號，每人每日額度擋不住，帳單算在部署者頭上。要開得另外設 `STUDY_PLANNER_DEMO_LLM=1`。
+- **範例計畫是 14 天 × 每天 90 分鐘**：排得下全部 30 題重點題組，還留了餘裕。10 天 × 60 分鐘會排滿，漏掉的那一題一挪就超出期限，訪客第一眼看到的會是紅色的「時間不夠」。
+
+**代價**：訪客帳號與正式資料放在同一個資料庫、靠 `user_id` 隔開，隔離的強度就是 repository 層每一句查詢都有帶 `user_id`，這件事由 `tests/test_demo.py` 與 `tests/test_user_data.py` 守著。
+
 ## 排程規則
 
 1. **前置先排**：某主題的題目不得排在它的前置主題的題目之前。
@@ -195,12 +208,32 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 323 個測試
+pytest -q                          # 335 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
 
+剛 clone 下來可以跳過 `import_data`：資料庫是空的時，網站第一次開交易會自動建表並匯入題庫。
+
 沒有 `ANTHROPIC_API_KEY` 也能完整執行，說明文字會使用預存版本。有 key 時，排出計畫會替每一題生成一句說明，任務卡會標出這句是「Claude 即時生成」還是「預存說明」。
+
+## 公開展示版（部署）
+
+用 [Streamlit Community Cloud](https://share.streamlit.io)，免費、直接從 GitHub 部署：
+
+1. 用 GitHub 帳號登入 share.streamlit.io，按 **Create app** → **Deploy a public app from GitHub**。
+2. Repository 選這個 repo、Branch `main`、Main file path 填 `app/Home.py`。
+3. **Advanced settings**：Python 選 **3.14**（跟 CI 一樣）；Secrets 貼上下面這行，然後按 Deploy。
+
+```toml
+STUDY_PLANNER_DEMO = "1"
+```
+
+不需要設資料庫，也不需要先匯入題庫：第一次開網頁時會自動建表、匯入題庫。雲端主機的檔案系統不保證永久保存，SQLite 檔案在主機重開時可能被清掉，對展示版沒有影響（訪客資料本來就只留 12 小時）。本機要試展示版：
+
+```bash
+STUDY_PLANNER_DEMO=1 DATABASE_URL=sqlite:///demo.db streamlit run app/Home.py
+```
 
 ## 資料庫與時間
 
@@ -236,6 +269,7 @@ streamlit run app/Home.py
 | `tests/test_quota_db.py` | 額度存資料庫：重開不歸零、退回沒用到的次數、不同用途分開算 |
 | `tests/test_game_map.py`（續） | 重點路線依階段分區、經驗值（Easy 10／Medium 25／Hard 50）、重點題組 30 題且 Medium 過半 |
 | `tests/test_adventure.py` | 冒險計時：分鐘無條件進位且有上限、同一題重按不重新計時、換題重新計時、打勾自動記分鐘（自己填的優先）、地圖計畫外完成也記分鐘並算進估時校正、刪帳號一併刪除 |
+| `tests/test_demo.py` | 公開展示版：每個分頁一個訪客、範例計畫只留昨天一題沒做而且重排不會超時、過期只清訪客、展示版不呼叫 Claude、空資料庫自動匯入題庫、五個頁面對新訪客都畫得出來 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
 UI 冒煙測試不是裝飾：`pytest` 全綠、伺服器回 200、log 乾淨的情況下，打勾功能曾經是一個無窮迴圈——`st.rerun()` 用拋例外實作，而那個例外會讓外層的交易 rollback，於是每次重跑都再標記一次。只有真的去點那個 checkbox 才會發現。

@@ -18,7 +18,7 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.deps import get_current_user  # noqa: E402
+from api.deps import get_current_user, show_demo_notice  # noqa: E402
 from core.calibration import ACCURATE_RANGE, MIN_SAMPLES, TOO_FEW, calibrate  # noqa: E402
 from core.review import MONTH, WEEK, completion_trend, lagging_topics, period_start  # noqa: E402
 from db import repositories as repo  # noqa: E402
@@ -33,6 +33,7 @@ UNDONE_COLOR = "#D9D2C3"
 
 
 def main() -> None:
+    show_demo_notice()
     st.title("📈 回顧")
     st.caption(
         "完成率＝原本排在那段期間的題目裡做完了幾題。照**原本**的日子算，"

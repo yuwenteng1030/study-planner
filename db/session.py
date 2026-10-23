@@ -143,7 +143,28 @@ def _ensure_schema() -> None:
     with _schema_lock:
         if not _schema_ready:
             upgrade_to_head()
+            _sync_catalog()
             _schema_ready = True
+
+
+def _sync_catalog() -> None:
+    """題庫是空的就從 ``data/`` 匯入；展示版每次啟動都重新同步一次。
+
+    為什麼放在這裡：部署到新機器（或剛 clone 下來）時資料庫是空的，原本要先記得跑
+    ``python -m scripts.import_data``，忘了就看到「題庫是空的」。展示版的資料庫跟著
+    雲端主機留著，題庫更新（改了 tasks.csv）後沒人會去手動匯入，所以每次啟動都 upsert。
+    本機的正式資料庫已經有題庫，這裡什麼都不做，題庫更新照舊手動匯入。
+    """
+    from sqlalchemy import func, select
+
+    from api.deps import is_demo
+    from db.models import Task
+    from scripts.import_data import upsert_catalog
+
+    with SessionLocal() as session, session.begin():
+        empty = not session.scalar(select(func.count()).select_from(Task))
+        if empty or is_demo():
+            upsert_catalog(session)
 
 
 @contextmanager

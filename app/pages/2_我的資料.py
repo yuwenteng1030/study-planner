@@ -22,7 +22,7 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.deps import get_current_user  # noqa: E402
+from api.deps import get_current_user, show_demo_notice  # noqa: E402
 from core import clock  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
@@ -38,6 +38,7 @@ CONFIRM_DROP = "刪除帳號"
 
 
 def main() -> None:
+    show_demo_notice()
     st.title("📦 我的資料")
     st.caption(
         "你的學習紀錄屬於你。這一頁可以把它整份下載帶走，也可以把它刪乾淨。"
