@@ -145,7 +145,7 @@ def main() -> None:
     if focus_only:
         remaining = [t for t in remaining if t.id in focus]
         if not remaining:
-            st.success("🏆 重點題組 30 題都做過了。關掉「只排重點題組」，排其餘的題目。")
+            st.success(f"🏆 重點題組 {len(focus)} 題都做過了。關掉「只排重點題組」，排其餘的題目。")
             return
     if not remaining:
         st.success("🏆 題庫裡每一題都做過了，沒有新的題目可以排。")

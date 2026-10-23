@@ -186,19 +186,31 @@ def layout(
 # ---------------------------------------------------------------------------
 
 
-def _smooth_path(points: list[tuple[float, float]]) -> str:
-    """Catmull-Rom 轉三次貝茲，讓小路是圓滑的曲線而不是折線。"""
-    if not points:
-        return ""
-    d = [f"M{points[0][0]:.1f},{points[0][1]:.1f}"]
+def _curve_segments(points: list[tuple[float, float]]) -> list[str]:
+    """每兩個相鄰關卡之間的一段三次貝茲（Catmull-Rom 換算），第 i 段從第 i 關到第 i+1 關。
+
+    分段算出來，是為了讓「走過的路」能只重畫其中幾段，而且跟整條小路的弧度完全重疊。
+    """
+    segments = []
     for i in range(len(points) - 1):
         p0 = points[i - 1] if i > 0 else points[i]
         p1, p2 = points[i], points[i + 1]
         p3 = points[i + 2] if i + 2 < len(points) else p2
         c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
         c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
-        d.append(f"C{c1[0]:.1f},{c1[1]:.1f} {c2[0]:.1f},{c2[1]:.1f} {p2[0]:.1f},{p2[1]:.1f}")
-    return " ".join(d)
+        segments.append(
+            f"M{p1[0]:.1f},{p1[1]:.1f} "
+            f"C{c1[0]:.1f},{c1[1]:.1f} {c2[0]:.1f},{c2[1]:.1f} {p2[0]:.1f},{p2[1]:.1f}"
+        )
+    return segments
+
+
+def _smooth_path(points: list[tuple[float, float]]) -> str:
+    """Catmull-Rom 轉三次貝茲，讓小路是圓滑的曲線而不是折線。"""
+    if not points:
+        return ""
+    head = f"M{points[0][0]:.1f},{points[0][1]:.1f}"
+    return " ".join([head] + [seg.split(" ", 1)[1] for seg in _curve_segments(points)])
 
 
 def _wrap(name: str, limit: int = 13, second: int = 18) -> list[str]:
@@ -308,7 +320,8 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
             f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{color}">{level}</text>'
         )
     if boss:
-        parts.append(f'<text x="{x:.1f}" y="{y - r - 3:.1f}" class="crown">👑</text>')
+        # 皇冠壓在關卡上緣（像戴帽子），不往上凸，免得碰到上一排的光圈
+        parts.append(f'<text x="{x:.1f}" y="{y - r + 6:.1f}" class="crown">👑</text>')
     if focus:
         parts.append(f'<text x="{x + r - 2:.1f}" y="{y - r + 6:.1f}" class="focus-star">⭐</text>')
     parts.append(f"</{tag}>")
@@ -358,7 +371,7 @@ def render_svg(
         f".topic-count{{font-size:10px;fill:{INK};opacity:0.7}}"
         ".mark{font-size:13px;font-weight:800;text-anchor:middle}"
         ".zone{font-size:14px;font-weight:700;fill:#fff;text-anchor:middle}"
-        ".crown{font-size:14px;text-anchor:middle;pointer-events:none}"
+        ".crown{font-size:12px;text-anchor:middle;pointer-events:none}"
         ".focus-star{font-size:10px;text-anchor:middle;pointer-events:none}"
         ".decor{font-size:16px;text-anchor:middle;pointer-events:none;opacity:0.9}"
         ".goal{font-size:22px;text-anchor:middle;pointer-events:none}"
@@ -400,10 +413,9 @@ def render_svg(
     out.append(
         f'<path d="{path}" fill="none" stroke="#D9C3A0" stroke-width="12" stroke-linecap="round"/>'
     )
-    # 走過的路：前後兩關都做完的那一段畫成金色
-    for a, b in zip(placed, placed[1:]):
+    # 走過的路：前後兩關都做完的那一段畫成金色（用整條路的同一段曲線，弧度才對得上）
+    for (a, b), seg in zip(zip(placed, placed[1:]), _curve_segments(points)):
         if a.stage.done and b.stage.done:
-            seg = _smooth_path([(a.x, a.y), (b.x, b.y)])
             out.append(
                 f'<path class="walked" d="{seg}" fill="none" stroke="{PATH_DONE}" '
                 f'stroke-width="12" stroke-linecap="round"/>'
@@ -414,10 +426,17 @@ def render_svg(
     )
 
     if placed:
-        # 終點的獎盃放在最後一關旁邊（往空的那一側）
+        # 終點的獎盃放在最後一關旁邊。小熊站在關卡左邊（x - BEAR_OFFSET），
+        # 所以右邊放不下、而小熊又正好站在最後一關時，就不畫獎盃，免得疊在小熊身上
         last = placed[-1]
-        gx = last.x + 40 if last.x + 40 < WIDTH - 12 else last.x - 40
-        out.append(f'<text x="{gx:.1f}" y="{last.y + 8:.1f}" class="goal">🏆</text>')
+        if last.x + 40 < WIDTH - 12:
+            gx: float | None = last.x + 40
+        elif last.stage.task_id != here_id:
+            gx = last.x - 40
+        else:
+            gx = None
+        if gx is not None:
+            out.append(f'<text x="{gx:.1f}" y="{last.y + 8:.1f}" class="goal">🏆</text>')
 
     for level, p in enumerate(placed, start=1):
         tid = p.stage.task_id

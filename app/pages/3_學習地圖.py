@@ -279,6 +279,15 @@ def main() -> None:
 
     levels = build_map(topics, tasks, done_ids)
     all_stages = build_stages(levels, tasks, done_ids)
+    # 「在地圖上看」連到不在重點路線上的題目時，先切到整個題庫，否則那一關根本沒畫出來
+    linked_early = st.query_params.get("task")
+    if (
+        linked_early is not None
+        and linked_early.isdigit()
+        and int(linked_early) not in focus_stages
+        and any(s.task_id == int(linked_early) for s in all_stages)
+    ):
+        st.session_state["map_focus_only"] = False
     focus_only = bool(focus_stages) and st.toggle(
         f"只看重點路線（{len(focus_stages)} 關）",
         value=True,

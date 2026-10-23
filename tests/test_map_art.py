@@ -294,3 +294,25 @@ def test_focus_layout_flows_five_per_row_without_topic_labels() -> None:
     rows = sorted({p.y for p in placed}, reverse=True)
     assert len(rows) == 2 and labels == []  # 5 + 2，不是 7 排
     assert sum(1 for p in placed if p.y == rows[0]) == PER_ROW
+
+
+def test_walked_segment_follows_the_same_curve_as_the_path() -> None:
+    """金色那一段要跟整條小路的那一段完全重疊（轉彎處不能是直線弦）。"""
+    from core.map_art import _curve_segments
+
+    stages = [_st(i, "s", 0, done=i <= 7) for i in range(1, 9)]  # 跨排，有轉彎
+    svg = render_svg(stages, _urls(stages), None)
+    root = _parse(svg)
+    walked = [p.get("d") for p in root.iterfind(".//svg:path[@class='walked']", NS)]
+    placed, *_ = layout(stages)
+    expected = _curve_segments([(p.x, p.y) for p in placed])[:6]
+    assert walked == expected
+
+
+def test_trophy_never_sits_on_the_bear() -> None:
+    # 5 關一排、從左到右：最後一關在最右邊，右邊放不下獎盃
+    stages = [_st(i, "s", 0, done=i < 5) for i in range(1, 6)]
+    root = _parse(render_svg(stages, _urls(stages), here_id=5))
+    assert root.find(".//svg:text[@class='goal']", NS) is None
+    root = _parse(render_svg(stages, _urls(stages), here_id=None))
+    assert root.find(".//svg:text[@class='goal']", NS) is not None

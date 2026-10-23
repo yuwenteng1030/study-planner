@@ -427,3 +427,20 @@ def test_map_opens_on_the_focus_route_by_default(seeded_app_db) -> None:
     assert data["svg"].count("data-task=") == 30
     assert "第一段・暖身" in data["svg"] and "第三段・進階" in data["svg"]
     assert {m.label for m in app.metric} >= {"等級", "經驗值", "重點路線"}
+
+
+def test_deep_link_to_a_non_focus_task_switches_to_the_full_map(seeded_app_db) -> None:
+    """「在地圖上看」連到不在重點路線上的題目：自動切成整個題庫並打開那一關。"""
+    import os
+    import sqlite3
+
+    db = os.environ["DATABASE_URL"].removeprefix("sqlite:///")
+    with sqlite3.connect(db) as conn:
+        task_id = conn.execute("SELECT id FROM tasks WHERE focus_stage IS NULL ORDER BY id LIMIT 1").fetchone()[0]
+    app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT)
+    app.query_params["task"] = str(task_id)
+    app.run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+    data = _map_data(app)
+    assert data["svg"].count("data-task=") == 125
+    assert data["focus"]["task"] == task_id
