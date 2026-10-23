@@ -126,6 +126,11 @@ class Task(Base):
 
     task_type: Mapped[str] = mapped_column(String(20), nullable=False, default="problem")
 
+    #: 重點題組的階段：1 暖身、2 Medium 主力、3 進階；不在重點題組裡是 NULL。
+    #: 依上機考的型態挑的（3 題 90 分鐘，以陣列／字串處理與 Medium 為主），
+    #: 讓使用者先練 30 題，而不是一開始就面對整個題庫。
+    focus_stage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     topic: Mapped["Topic"] = relationship(
         back_populates="tasks", foreign_keys=[topic_id]
     )

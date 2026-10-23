@@ -178,18 +178,18 @@ def test_no_bear_when_there_is_no_here_stage() -> None:
     assert root.findall(".//svg:g[@class='bear']", NS) == []
 
 
-def test_done_stage_shows_a_check_and_open_stage_shows_its_difficulty() -> None:
+def test_done_stage_shows_a_check_and_open_stage_shows_its_level_number() -> None:
     stages = [
         _st(1, "s", 0, done=True),
         _st(2, "s", 0, difficulty="Medium"),
         _st(3, "s", 0, difficulty="Hard"),
     ]
     root = _parse(render_svg(stages, _urls(stages), here_id=2))
-    marks = {
-        n.get("data-task"): n.find("svg:text[@class='mark']", NS).text
-        for n in root.findall(STAGE, NS)
-    }
-    assert marks == {"1": "✓", "2": "M", "3": "H"}
+    nodes = root.findall(STAGE, NS)
+    marks = {n.get("data-task"): n.find("svg:text[@class='mark']", NS).text for n in nodes}
+    # 關卡編號＝路線上的第幾關；難度放在 data-difficulty（外框顏色）
+    assert marks == {"1": "✓", "2": "2", "3": "3"}
+    assert {n.get("data-task"): n.get("data-difficulty") for n in nodes} == {"1": "E", "2": "M", "3": "H"}
     done = root.find(".//*[@data-task='1']", NS)
     assert "done" in done.get("class").split()
 
@@ -217,7 +217,7 @@ def test_titles_names_and_urls_are_escaped() -> None:
     root = _parse(render_svg(stages, {1: url}, here_id=1))
     node = root.find(STAGE, NS)
     assert node.get("href") == url
-    assert node.find("svg:title", NS).text.startswith('A < "B" & C<script>')
+    assert 'A < "B" & C<script>' in node.find("svg:title", NS).text
     assert root.findall(".//svg:script", NS) == [] and root.findall(".//svg:foreignObject", NS) == []
     topic = [t.text for t in root.iterfind(".//svg:text[@class='topic']", NS)]
     assert topic == _wrap("X & <Y></text><foreignObject>")
@@ -246,3 +246,51 @@ def test_real_map_renders_every_task(topics, tasks) -> None:
     nodes = root.findall(STAGE, NS)
     assert len(nodes) == len(tasks)
     assert all(n.get("href") for n in nodes)
+
+
+
+def test_hard_stage_is_a_boss_with_a_crown() -> None:
+    stages = [_st(1, "s", 0), _st(2, "s", 0, difficulty="Hard")]
+    root = _parse(render_svg(stages, _urls(stages), here_id=None))
+    boss = root.find(".//*[@data-task='2']", NS)
+    assert "boss" in boss.get("class").split()
+    assert boss.find("svg:text[@class='crown']", NS) is not None
+    assert root.find(".//*[@data-task='1']", NS).find("svg:text[@class='crown']", NS) is None
+
+
+def test_only_segments_between_two_done_stages_are_walked() -> None:
+    stages = [_st(1, "s", 0, done=True), _st(2, "s", 0, done=True), _st(3, "s", 0), _st(4, "s", 0, done=True)]
+    svg = render_svg(stages, _urls(stages), here_id=3)
+    assert svg.count('class="walked"') == 1
+
+
+def test_focus_stars_and_zone_name_override() -> None:
+    stages = [_st(1, "s", 0), _st(2, "s", 0)]
+    root = _parse(render_svg(stages, _urls(stages), None, focus_ids={2}, zone_names={0: "暖身"}))
+    assert root.find(".//*[@data-task='1']", NS).find("svg:text[@class='focus-star']", NS) is None
+    assert root.find(".//*[@data-task='2']", NS).find("svg:text[@class='focus-star']", NS) is not None
+    zones = [t.text for t in root.iterfind(".//svg:text[@class='zone']", NS)]
+    assert zones and zones[0].startswith("暖身")
+
+
+def test_zone_decoration_stays_clear_of_the_path_leaving_the_zone(topics, tasks) -> None:
+    """裝飾跟區名一樣，不能壓在往上一區走的那段小路上。"""
+    stages = _real(topics, tasks)
+    placed, bands, _, _ = layout(stages)
+    root = _parse(render_svg(stages, _urls(stages), None))
+    decors = [float(t.get("x")) for t in root.iterfind(".//svg:text[@class='decor']", NS)]
+    for band, x in zip(sorted(bands, key=lambda b: -b.top), decors):
+        members = [p for p in placed if p.stage.zone == band.zone]
+        above = [p for p in placed if p.y < band.top]
+        if not (members and above):
+            continue
+        lo, hi = sorted((members[-1].x, above[0].x))
+        assert not (lo - 20 <= x <= hi + 20), (band.zone, x, lo, hi)
+
+
+def test_focus_layout_flows_five_per_row_without_topic_labels() -> None:
+    stages = [_st(i, "abcdefgh"[i % 8], 0) for i in range(1, 8)]  # 7 關、每關不同主題
+    placed, bands, labels, _ = layout(stages, by_topic=False)
+    rows = sorted({p.y for p in placed}, reverse=True)
+    assert len(rows) == 2 and labels == []  # 5 + 2，不是 7 排
+    assert sum(1 for p in placed if p.y == rows[0]) == PER_ROW

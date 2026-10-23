@@ -1,126 +1,126 @@
-source,title,url,topic,prereq,difficulty,est_minutes,static_note
-HR,Find the Runner-Up Score!,https://www.hackerrank.com/challenges/find-second-maximum-number-in-a-list/problem,python_basic,,Easy,10,list 與 set 的基本操作，注意重複值
-HR,collections.Counter(),https://www.hackerrank.com/challenges/collections-counter/problem,python_basic,,Easy,15,Counter 的建立與遞減，之後雜湊題都靠它
-HR,DefaultDict Tutorial,https://www.hackerrank.com/challenges/defaultdict-tutorial/problem,python_basic,,Easy,15,defaultdict 省掉「key 不存在」的判斷
-HR,List Comprehensions,https://www.hackerrank.com/challenges/list-comprehensions/problem,python_basic,,Easy,10,推導式取代三層巢狀迴圈，上機考的基本手速
-HR,Nested Lists,https://www.hackerrank.com/challenges/nested-list/problem,python_basic,,Easy,15,多鍵排序與「第二小」的邊界，注意重複分數
-HR,Finding the Percentage,https://www.hackerrank.com/challenges/finding-the-percentage/problem,python_basic,,Easy,15,dict 查找與格式化輸出，輸入解析要穩
-HR,Collections.OrderedDict(),https://www.hackerrank.com/challenges/py-collections-ordereddict/problem,python_basic,,Easy,15,插入順序與累加，計數題的另一種寫法
-HR,Piling Up!,https://www.hackerrank.com/challenges/piling-up/problem,python_basic,,Medium,25,deque 兩端取值，list.pop(0) 是 O(n)
-HR,Counting Valleys,https://www.hackerrank.com/challenges/counting-valleys/problem,arrays,,Easy,15,單次掃描並維護狀態變數
-HR,Jumping on the Clouds,https://www.hackerrank.com/challenges/jumping-on-the-clouds/problem,arrays,,Easy,15,線性走訪加簡單決策，索引邊界易錯
-HR,Repeated String,https://www.hackerrank.com/challenges/repeated-string/problem,arrays,,Easy,20,用整除與餘數避開實際展開字串
-HR,Arrays: Left Rotation,https://www.hackerrank.com/challenges/ctci-array-left-rotation/problem,arrays,,Easy,15,取模做位移，不要真的搬移元素
-HR,2D Array - DS,https://www.hackerrank.com/challenges/2d-array/problem,arrays,,Easy,20,固定形狀的二維走訪與邊界計算
-HR,Subarray Division,https://www.hackerrank.com/challenges/the-birthday-bar/problem,arrays,,Easy,15,固定長度窗口，進一個出一個更新總和
-HR,Dynamic Array,https://www.hackerrank.com/challenges/dynamic-array/problem,arrays,,Easy,20,索引運算與二維 list 初始化的陷阱
-HR,Sparse Arrays,https://www.hackerrank.com/challenges/sparse-arrays/problem,arrays,,Medium,25,先建計數表再查詢（Counter）；不要每次重掃
-HR,New Year Chaos,https://www.hackerrank.com/challenges/new-year-chaos/problem,arrays,,Medium,35,只往前看兩格，超過就直接不可能
-HR,Array Manipulation,https://www.hackerrank.com/challenges/crush/problem,arrays,,Hard,60,差分陣列，區間加值只改兩端
-HR,Two Strings,https://www.hackerrank.com/challenges/two-strings/problem,strings,hashmaps,Easy,15,轉成集合取交集，比逐字比對快
-HR,Palindrome Index,https://www.hackerrank.com/challenges/palindrome-index/problem,strings,,Easy,20,頭尾雙指標，第一次不相等就是候選
-HR,Anagram,https://www.hackerrank.com/challenges/anagram/problem,strings,hashmaps,Easy,20,對半切後比對計數差，奇數長度直接 -1
-HR,Strings: Making Anagrams,https://www.hackerrank.com/challenges/ctci-making-anagrams/problem,strings,hashmaps,Easy,20,兩邊計數相減的絕對值總和
-HR,Alternating Characters,https://www.hackerrank.com/challenges/alternating-characters/problem,strings,,Easy,15,相鄰比較一次掃完，不用真的刪字元
-HR,Sherlock and the Valid String,https://www.hackerrank.com/challenges/sherlock-and-valid-string/problem,strings,hashmaps,Medium,35,次數的次數，只允許一個異常值
-HR,Sherlock and Anagrams,https://www.hackerrank.com/challenges/sherlock-and-anagrams/problem,strings,hashmaps,Medium,40,列舉子字串並正規化後計數
-HR,Special String Again,https://www.hackerrank.com/challenges/special-palindrome-again/problem,strings,,Medium,35,把連續相同字元壓成段落再數
-HR,Common Child,https://www.hackerrank.com/challenges/common-child/problem,strings,,Medium,40,最長共同子序列，二維 DP 的入門題
-HR,Determining DNA Health,https://www.hackerrank.com/challenges/determining-dna-health/problem,strings,hashmaps,Hard,70,每個基因名稱對應到出現位置的有序清單，再用前綴和加二分搜尋算區間總分
-HR,Sales by Match,https://www.hackerrank.com/challenges/sock-merchant/problem,hashmaps,,Easy,15,用字典計數，雜湊表最基本的應用
-HR,Hash Tables: Ransom Note,https://www.hackerrank.com/challenges/ctci-ransom-note/problem,hashmaps,,Easy,20,計數後逐項扣減，注意大小寫敏感
-HR,Picking Numbers,https://www.hackerrank.com/challenges/picking-numbers/problem,hashmaps,,Easy,20,相鄰兩個值的計數相加取最大
-HR,Frequency Queries,https://www.hackerrank.com/challenges/frequency-queries/problem,hashmaps,,Medium,40,同時維護值的次數與次數的次數
-HR,Count Triplets,https://www.hackerrank.com/challenges/count-triplets-1/problem,hashmaps,,Medium,45,左右兩個計數表夾中間，別用三層迴圈
-HR,Big Sorting,https://www.hackerrank.com/challenges/big-sorting/problem,sorting,,Easy,15,字串數字要按數值排，先比長度再比字典序
-HR,Minimum Absolute Difference in an Array,https://www.hackerrank.com/challenges/minimum-absolute-difference-in-an-array/problem,sorting,,Easy,15,排序後只需比相鄰兩項
-HR,Closest Numbers,https://www.hackerrank.com/challenges/closest-numbers/problem,sorting,,Easy,20,排序後掃一次，同時收集所有最小差配對
-HR,Bubble Sort,https://www.hackerrank.com/challenges/ctci-bubble-sort/problem,sorting,,Easy,20,只要數交換次數，不需要真的排完
-HR,Comparator,https://www.hackerrank.com/challenges/ctci-comparator-sorting/problem,sorting,,Medium,25,多鍵排序與穩定性，面試要能解釋
-HR,Minimum Swaps 2,https://www.hackerrank.com/challenges/minimum-swaps-2/problem,sorting,,Medium,30,值與索引的對應關係，交換到位即可
-HR,Fraudulent Activity Notifications,https://www.hackerrank.com/challenges/fraudulent-activity-notifications/problem,sorting,,Medium,45,滑動中位數，用計數排序維護視窗
-HR,Full Counting Sort,https://www.hackerrank.com/challenges/countingsort4/problem,sorting,,Medium,40,計數排序的穩定版，輸出要保留原始順序
-HR,Merge Sort: Counting Inversions,https://www.hackerrank.com/challenges/ctci-merge-sort/problem,sorting,,Hard,45,逆序對數量＝合併排序的副產品
-HR,Ice Cream Parlor,https://www.hackerrank.com/challenges/icecream-parlor/problem,search,hashmaps,Easy,20,找兩數和等於目標，邊走邊建表
-HR,Pairs,https://www.hackerrank.com/challenges/pairs/problem,search,sorting,Medium,30,找固定差值的配對，集合或雙指標皆可
-HR,Triple sum,https://www.hackerrank.com/challenges/triple-sum/problem,search,sorting,Medium,40,固定中間那個數，左右各用二分計數
-HR,Minimum Time Required,https://www.hackerrank.com/challenges/minimum-time-required/problem,search,,Medium,45,對答案本身做二分，單調性是前提
-HR,Maximum Subarray Sum,https://www.hackerrank.com/challenges/maximum-subarray-sum/problem,search,,Hard,60,前綴和取模後用有序集合找最接近值
-HR,Making Candies,https://www.hackerrank.com/challenges/making-candies/problem,search,,Hard,65,對答案（天數）做二分搜尋，注意乘法溢位與提早結束
-HR,Mark and Toys,https://www.hackerrank.com/challenges/mark-and-toys/problem,greedy,sorting,Easy,20,排序後取最便宜，要能說明為何最佳
-HR,Luck Balance,https://www.hackerrank.com/challenges/luck-balance/problem,greedy,sorting,Easy,20,可放棄的項目排序後取前 k 大
-HR,Priyanka and Toys,https://www.hackerrank.com/challenges/priyanka-and-toys/problem,greedy,sorting,Easy,20,排序後以最小值開新容器，區間覆蓋
-HR,Permuting Two Arrays,https://www.hackerrank.com/challenges/two-arrays/problem,greedy,sorting,Easy,20,一個升冪一個降冪配對，要能說明為何最佳
-HR,Jim and the Orders,https://www.hackerrank.com/challenges/jim-and-the-orders/problem,greedy,sorting,Easy,20,按完成時間排序後輸出原始編號
-HR,Max Min,https://www.hackerrank.com/challenges/angry-children/problem,greedy,sorting,Medium,30,排序後取連續 k 個，窗口最小差
-HR,Greedy Florist,https://www.hackerrank.com/challenges/greedy-florist/problem,greedy,sorting,Medium,35,由貴到便宜分配，貪婪順序決定答案
-HR,Cutting Boards,https://www.hackerrank.com/challenges/board-cutting/problem,greedy,sorting,Hard,55,由貴到便宜切，切痕數量隨已切次數成長
-HR,Chief Hopper,https://www.hackerrank.com/challenges/chief-hopper/problem,greedy,,Hard,50,從最後一棟往回推最低所需能量，倒著想比正著試簡單
-HR,Maximum Element,https://www.hackerrank.com/challenges/maximum-element/problem,stacks_queues,,Easy,20,輔助堆疊同步記錄當前最大值
-HR,Equal Stacks,https://www.hackerrank.com/challenges/equal-stacks/problem,stacks_queues,arrays,Easy,25,先算前綴高度，再同步往下退
-HR,Balanced Brackets,https://www.hackerrank.com/challenges/balanced-brackets/problem,stacks_queues,,Medium,25,多種括號配對，型別也要相符
-HR,Queues: A Tale of Two Stacks,https://www.hackerrank.com/challenges/ctci-queue-using-two-stacks/problem,stacks_queues,,Medium,30,兩個堆疊模擬佇列，攤還複雜度
-HR,Simple Text Editor,https://www.hackerrank.com/challenges/simple-text-editor/problem,stacks_queues,,Medium,40,用堆疊存操作紀錄來實作 undo
-HR,Castle on the Grid,https://www.hackerrank.com/challenges/castle-on-the-grid/problem,stacks_queues,,Medium,45,BFS 用佇列，一次滑到底才算一步
-HR,Largest Rectangle,https://www.hackerrank.com/challenges/largest-rectangle/problem,stacks_queues,,Medium,50,單調堆疊進階，邊界哨兵的處理
-HR,Min Max Riddle,https://www.hackerrank.com/challenges/min-max-riddle/problem,stacks_queues,,Medium,55,每個元素當最小值的最大區間長度
-HR,Truck Tour,https://www.hackerrank.com/challenges/truck-tour/problem,stacks_queues,arrays,Hard,50,環狀起點問題，前綴和轉折點即答案
-HR,Poisonous Plants,https://www.hackerrank.com/challenges/poisonous-plants/problem,stacks_queues,,Hard,60,堆疊內記錄存活天數，單調性是關鍵
-HR,Print the Elements of a Linked List,https://www.hackerrank.com/challenges/print-the-elements-of-a-linked-list/problem,linked_lists,,Easy,10,先把走訪寫熟，後面每一題都靠它
-HR,Insert a node at a specific position in a linked list,https://www.hackerrank.com/challenges/insert-a-node-at-a-specific-position-in-a-linked-list/problem,linked_lists,,Easy,15,加 dummy head，頭節點就不用特判
-HR,Reverse a linked list,https://www.hackerrank.com/challenges/reverse-a-linked-list/problem,linked_lists,,Easy,15,prev／cur／next 三個指針，畫圖再寫
-HR,Inserting a Node Into a Sorted Doubly Linked List,https://www.hackerrank.com/challenges/insert-a-node-into-a-sorted-doubly-linked-list/problem,linked_lists,,Easy,20,雙向串列要同時接好 prev 與 next
-HR,Find Merge Point of Two Lists,https://www.hackerrank.com/challenges/find-the-merge-point-of-two-joined-linked-lists/problem,linked_lists,,Easy,20,長度差先補齊，再同步往前走
-HR,Cycle Detection,https://www.hackerrank.com/challenges/detect-whether-a-linked-list-contains-a-cycle/problem,linked_lists,,Medium,25,快慢指針，相遇即有環
-HR,Recursion: Fibonacci Numbers,https://www.hackerrank.com/challenges/ctci-fibonacci-numbers/problem,recursion,,Easy,15,先寫終止條件，再寫縮小規模那一步
-HR,Davis' Staircase,https://www.hackerrank.com/challenges/ctci-recursive-staircase/problem,recursion,,Medium,30,遞迴加記憶化，再改成迭代填表
-HR,Recursive Digit Sum,https://www.hackerrank.com/challenges/recursive-digit-sum/problem,recursion,,Medium,25,先算一次再乘 k，不要真的展開字串
-HR,The Power Sum,https://www.hackerrank.com/challenges/the-power-sum/problem,recursion,,Medium,35,回溯三件事：選擇、遞迴、撤銷選擇
-HR,Crossword Puzzle,https://www.hackerrank.com/challenges/crossword-puzzle/problem,recursion,,Medium,50,回溯填字，撤銷選擇要還原整條線
-HR,Tree: Preorder Traversal,https://www.hackerrank.com/challenges/tree-preorder-traversal/problem,trees,,Easy,15,「處理自己」放在第一行
-HR,Tree: Inorder Traversal,https://www.hackerrank.com/challenges/tree-inorder-traversal/problem,trees,,Easy,15,二元搜尋樹的中序是遞增序列
-HR,Tree: Postorder Traversal,https://www.hackerrank.com/challenges/tree-postorder-traversal/problem,trees,,Easy,15,「處理自己」放在最後一行
-HR,Tree: Height of a Binary Tree,https://www.hackerrank.com/challenges/tree-height-of-a-binary-tree/problem,trees,,Easy,20,左右子樹的答案合起來，邊界是空節點
-HR,Tree: Level Order Traversal,https://www.hackerrank.com/challenges/tree-level-order-traversal/problem,trees,,Easy,20,層序用佇列，要分層就先記當層長度
-HR,Tree: Top View,https://www.hackerrank.com/challenges/tree-top-view/problem,trees,,Easy,25,記每個水平位置第一次出現的節點
-HR,Binary Search Tree: Lowest Common Ancestor,https://www.hackerrank.com/challenges/binary-search-tree-lowest-common-ancestor/problem,trees,,Easy,25,利用 BST 的大小關係往一邊走
-HR,Is This a Binary Search Tree?,https://www.hackerrank.com/challenges/is-binary-search-tree/problem,trees,,Medium,35,傳上下界下去，不能只比父子兩層
-HR,Swap Nodes [Algo],https://www.hackerrank.com/challenges/swap-nodes-algo/problem,trees,,Medium,35,按深度交換左右子樹，遞迴帶層數
-HR,Balanced Forest,https://www.hackerrank.com/challenges/balanced-forest/problem,trees,,Hard,70,子樹和＋雜湊表，情況分類要列完
-HR,QHEAP1,https://www.hackerrank.com/challenges/qheap1/problem,heaps,,Easy,25,heapq 配一個已刪集合做延遲刪除
-HR,Jesse and Cookies,https://www.hackerrank.com/challenges/jesse-and-cookies/problem,heaps,,Easy,25,一直取最小值才用堆，排一次用 sorted 就好
-HR,Find the Running Median,https://www.hackerrank.com/challenges/find-the-running-median/problem,heaps,,Hard,50,最大堆配最小堆，兩邊維持平衡
-HR,Roads and Libraries,https://www.hackerrank.com/challenges/torque-and-development/problem,graphs,,Medium,40,算連通塊數量，再比兩種成本
-HR,Journey to the Moon,https://www.hackerrank.com/challenges/journey-to-the-moon/problem,graphs,,Medium,45,連通塊大小的兩兩配對計數
-HR,Find the nearest clone,https://www.hackerrank.com/challenges/find-the-nearest-clone/problem,graphs,,Medium,40,多起點 BFS，同色節點一起下水
-HR,Even Tree,https://www.hackerrank.com/challenges/even-tree/problem,graphs,,Medium,35,子樹大小為偶數就可以切一刀
-HR,BFS: Shortest Reach in a Graph,https://www.hackerrank.com/challenges/ctci-bfs-shortest-reach/problem,graphs,,Hard,35,無權圖最短路是 BFS，不是 Dijkstra
-HR,Matrix,https://www.hackerrank.com/challenges/matrix/problem,graphs,,Hard,70,由大到小加邊的反向思考（並查集）
-HR,Max Array Sum,https://www.hackerrank.com/challenges/max-array-sum/problem,dp_1d,,Medium,35,dp[i] 只依賴前兩項，空間可壓成常數
-HR,The Coin Change Problem,https://www.hackerrank.com/challenges/coin-change/problem,dp_1d,,Medium,40,硬幣在外層、金額在內層才不會重複計數
-HR,Fibonacci Modified,https://www.hackerrank.com/challenges/fibonacci-modified/problem,dp_1d,,Medium,30,Python 整數無上限，但要注意項數成長
-HR,Candies,https://www.hackerrank.com/challenges/candies/problem,dp_1d,,Medium,45,左右各掃一次再取最大，一次掃不完
-HR,Abbreviation,https://www.hackerrank.com/challenges/abbr/problem,dp_2d,,Medium,45,dp[i][j]＝各取前 i、前 j 個；邊界先初始化
-HR,Unbounded Knapsack,https://www.hackerrank.com/challenges/unbounded-knapsack/problem,dp_2d,,Medium,40,容量當維度，同一物品可重複取
-HR,The Grid Search,https://www.hackerrank.com/challenges/the-grid-search/problem,two_d_arrays,,Medium,35,邊界檢查寫成一個函式，不要每次寫四個條件
-HR,Queen's Attack II,https://www.hackerrank.com/challenges/queens-attack-2/problem,two_d_arrays,,Medium,40,八個方向各取最近障礙，不要逐格走
-HR,Ema's Supercomputer,https://www.hackerrank.com/challenges/two-pluses/problem,two_d_arrays,,Medium,45,先列出所有可行十字，再兩兩檢查不重疊
-HR,Forming a Magic Square,https://www.hackerrank.com/challenges/magic-square-forming/problem,two_d_arrays,,Medium,35,只有八個合法解，直接枚舉比推導快
-HR,Lonely Integer,https://www.hackerrank.com/challenges/lonely-integer/problem,bit_manipulation,,Easy,15,XOR 自己等於 0，一次掃完
-HR,Flipping bits,https://www.hackerrank.com/challenges/flipping-bits/problem,bit_manipulation,,Easy,20,固定 32 位元，Python 要自己遮罩
-HR,Maximizing XOR,https://www.hackerrank.com/challenges/maximizing-xor/problem,bit_manipulation,,Easy,20,最高位不同的那一位決定答案
-HR,Sum vs XOR,https://www.hackerrank.com/challenges/sum-vs-xor/problem,bit_manipulation,,Easy,25,n 的 0 位元個數決定答案數量
-HR,Counter game,https://www.hackerrank.com/challenges/counter-game/problem,bit_manipulation,,Medium,30,x & (x-1) 消最低位的 1，數步數定勝負
-HR,Handshake,https://www.hackerrank.com/challenges/handshake/problem,math_number_theory,,Easy,10,"組合數 C(n,2)：n 人兩兩握手一次"
-HR,Restaurant,https://www.hackerrank.com/challenges/restaurant/problem,math_number_theory,,Easy,15,最大公因數，math.gcd 可直接用
-HR,Halloween Sale,https://www.hackerrank.com/challenges/halloween-sale/problem,math_number_theory,,Easy,20,等比遞減取整，注意下界
-HR,Sherlock and Divisors,https://www.hackerrank.com/challenges/sherlock-and-divisors/problem,math_number_theory,,Easy,20,只枚舉到 sqrt(n)，成對計入
-HR,Maximum Draws,https://www.hackerrank.com/challenges/maximum-draws/problem,math_number_theory,,Easy,10,鴿籠原理，答案是 n+1
-HR,Is Fibo,https://www.hackerrank.com/challenges/is-fibo/problem,math_number_theory,,Medium,20,先推出封閉形式或預先建表，再決定怎麼查
-HR,Time Complexity: Primality,https://www.hackerrank.com/challenges/ctci-big-o/problem,math_number_theory,,Medium,25,只試到 sqrt(n)，質數判斷的標準做法
-HR,Contacts,https://www.hackerrank.com/challenges/contacts/problem,tries,,Medium,50,節點用 dict 存子節點，順手記前綴計數
-HR,No Prefix Set,https://www.hackerrank.com/challenges/no-prefix-set/problem,tries,,Hard,45,插入時同時檢查兩個方向的前綴衝突
-HR,Flipping the Matrix,https://www.hackerrank.com/challenges/flipping-the-matrix/problem,misc,,Medium,40,每個位置只有四個候選，取最大即可
-HR,Almost Sorted,https://www.hackerrank.com/challenges/almost-sorted/problem,misc,,Medium,40,先找出不合序的位置，再分類討論
-HR,Maximum Xor,https://www.hackerrank.com/challenges/maximum-xor/problem,misc,,Medium,40,把數字建成字典樹，逐位走相反方向
-HR,Friend Circle Queries,https://www.hackerrank.com/challenges/friend-circle-queries/problem,misc,,Medium,60,並查集，同時維護最大集合大小
+source,title,url,topic,prereq,difficulty,est_minutes,static_note,focus
+HR,Find the Runner-Up Score!,https://www.hackerrank.com/challenges/find-second-maximum-number-in-a-list/problem,python_basic,,Easy,10,list 與 set 的基本操作，注意重複值,
+HR,collections.Counter(),https://www.hackerrank.com/challenges/collections-counter/problem,python_basic,,Easy,15,Counter 的建立與遞減，之後雜湊題都靠它,1
+HR,DefaultDict Tutorial,https://www.hackerrank.com/challenges/defaultdict-tutorial/problem,python_basic,,Easy,15,defaultdict 省掉「key 不存在」的判斷,1
+HR,List Comprehensions,https://www.hackerrank.com/challenges/list-comprehensions/problem,python_basic,,Easy,10,推導式取代三層巢狀迴圈，上機考的基本手速,
+HR,Nested Lists,https://www.hackerrank.com/challenges/nested-list/problem,python_basic,,Easy,15,多鍵排序與「第二小」的邊界，注意重複分數,
+HR,Finding the Percentage,https://www.hackerrank.com/challenges/finding-the-percentage/problem,python_basic,,Easy,15,dict 查找與格式化輸出，輸入解析要穩,
+HR,Collections.OrderedDict(),https://www.hackerrank.com/challenges/py-collections-ordereddict/problem,python_basic,,Easy,15,插入順序與累加，計數題的另一種寫法,
+HR,Piling Up!,https://www.hackerrank.com/challenges/piling-up/problem,python_basic,,Medium,25,deque 兩端取值，list.pop(0) 是 O(n),
+HR,Counting Valleys,https://www.hackerrank.com/challenges/counting-valleys/problem,arrays,,Easy,15,單次掃描並維護狀態變數,
+HR,Jumping on the Clouds,https://www.hackerrank.com/challenges/jumping-on-the-clouds/problem,arrays,,Easy,15,線性走訪加簡單決策，索引邊界易錯,
+HR,Repeated String,https://www.hackerrank.com/challenges/repeated-string/problem,arrays,,Easy,20,用整除與餘數避開實際展開字串,1
+HR,Arrays: Left Rotation,https://www.hackerrank.com/challenges/ctci-array-left-rotation/problem,arrays,,Easy,15,取模做位移，不要真的搬移元素,1
+HR,2D Array - DS,https://www.hackerrank.com/challenges/2d-array/problem,arrays,,Easy,20,固定形狀的二維走訪與邊界計算,
+HR,Subarray Division,https://www.hackerrank.com/challenges/the-birthday-bar/problem,arrays,,Easy,15,固定長度窗口，進一個出一個更新總和,
+HR,Dynamic Array,https://www.hackerrank.com/challenges/dynamic-array/problem,arrays,,Easy,20,索引運算與二維 list 初始化的陷阱,
+HR,Sparse Arrays,https://www.hackerrank.com/challenges/sparse-arrays/problem,arrays,,Medium,25,先建計數表再查詢（Counter）；不要每次重掃,2
+HR,New Year Chaos,https://www.hackerrank.com/challenges/new-year-chaos/problem,arrays,,Medium,35,只往前看兩格，超過就直接不可能,2
+HR,Array Manipulation,https://www.hackerrank.com/challenges/crush/problem,arrays,,Hard,60,差分陣列，區間加值只改兩端,3
+HR,Two Strings,https://www.hackerrank.com/challenges/two-strings/problem,strings,hashmaps,Easy,15,轉成集合取交集，比逐字比對快,1
+HR,Palindrome Index,https://www.hackerrank.com/challenges/palindrome-index/problem,strings,,Easy,20,頭尾雙指標，第一次不相等就是候選,
+HR,Anagram,https://www.hackerrank.com/challenges/anagram/problem,strings,hashmaps,Easy,20,對半切後比對計數差，奇數長度直接 -1,
+HR,Strings: Making Anagrams,https://www.hackerrank.com/challenges/ctci-making-anagrams/problem,strings,hashmaps,Easy,20,兩邊計數相減的絕對值總和,
+HR,Alternating Characters,https://www.hackerrank.com/challenges/alternating-characters/problem,strings,,Easy,15,相鄰比較一次掃完，不用真的刪字元,
+HR,Sherlock and the Valid String,https://www.hackerrank.com/challenges/sherlock-and-valid-string/problem,strings,hashmaps,Medium,35,次數的次數，只允許一個異常值,2
+HR,Sherlock and Anagrams,https://www.hackerrank.com/challenges/sherlock-and-anagrams/problem,strings,hashmaps,Medium,40,列舉子字串並正規化後計數,2
+HR,Special String Again,https://www.hackerrank.com/challenges/special-palindrome-again/problem,strings,,Medium,35,把連續相同字元壓成段落再數,2
+HR,Common Child,https://www.hackerrank.com/challenges/common-child/problem,strings,,Medium,40,最長共同子序列，二維 DP 的入門題,3
+HR,Determining DNA Health,https://www.hackerrank.com/challenges/determining-dna-health/problem,strings,hashmaps,Hard,70,每個基因名稱對應到出現位置的有序清單，再用前綴和加二分搜尋算區間總分,
+HR,Sales by Match,https://www.hackerrank.com/challenges/sock-merchant/problem,hashmaps,,Easy,15,用字典計數，雜湊表最基本的應用,
+HR,Hash Tables: Ransom Note,https://www.hackerrank.com/challenges/ctci-ransom-note/problem,hashmaps,,Easy,20,計數後逐項扣減，注意大小寫敏感,1
+HR,Picking Numbers,https://www.hackerrank.com/challenges/picking-numbers/problem,hashmaps,,Easy,20,相鄰兩個值的計數相加取最大,
+HR,Frequency Queries,https://www.hackerrank.com/challenges/frequency-queries/problem,hashmaps,,Medium,40,同時維護值的次數與次數的次數,2
+HR,Count Triplets,https://www.hackerrank.com/challenges/count-triplets-1/problem,hashmaps,,Medium,45,左右兩個計數表夾中間，別用三層迴圈,2
+HR,Big Sorting,https://www.hackerrank.com/challenges/big-sorting/problem,sorting,,Easy,15,字串數字要按數值排，先比長度再比字典序,
+HR,Minimum Absolute Difference in an Array,https://www.hackerrank.com/challenges/minimum-absolute-difference-in-an-array/problem,sorting,,Easy,15,排序後只需比相鄰兩項,
+HR,Closest Numbers,https://www.hackerrank.com/challenges/closest-numbers/problem,sorting,,Easy,20,排序後掃一次，同時收集所有最小差配對,
+HR,Bubble Sort,https://www.hackerrank.com/challenges/ctci-bubble-sort/problem,sorting,,Easy,20,只要數交換次數，不需要真的排完,
+HR,Comparator,https://www.hackerrank.com/challenges/ctci-comparator-sorting/problem,sorting,,Medium,25,多鍵排序與穩定性，面試要能解釋,
+HR,Minimum Swaps 2,https://www.hackerrank.com/challenges/minimum-swaps-2/problem,sorting,,Medium,30,值與索引的對應關係，交換到位即可,2
+HR,Fraudulent Activity Notifications,https://www.hackerrank.com/challenges/fraudulent-activity-notifications/problem,sorting,,Medium,45,滑動中位數，用計數排序維護視窗,2
+HR,Full Counting Sort,https://www.hackerrank.com/challenges/countingsort4/problem,sorting,,Medium,40,計數排序的穩定版，輸出要保留原始順序,
+HR,Merge Sort: Counting Inversions,https://www.hackerrank.com/challenges/ctci-merge-sort/problem,sorting,,Hard,45,逆序對數量＝合併排序的副產品,3
+HR,Ice Cream Parlor,https://www.hackerrank.com/challenges/icecream-parlor/problem,search,hashmaps,Easy,20,找兩數和等於目標，邊走邊建表,
+HR,Pairs,https://www.hackerrank.com/challenges/pairs/problem,search,sorting,Medium,30,找固定差值的配對，集合或雙指標皆可,2
+HR,Triple sum,https://www.hackerrank.com/challenges/triple-sum/problem,search,sorting,Medium,40,固定中間那個數，左右各用二分計數,
+HR,Minimum Time Required,https://www.hackerrank.com/challenges/minimum-time-required/problem,search,,Medium,45,對答案本身做二分，單調性是前提,2
+HR,Maximum Subarray Sum,https://www.hackerrank.com/challenges/maximum-subarray-sum/problem,search,,Hard,60,前綴和取模後用有序集合找最接近值,
+HR,Making Candies,https://www.hackerrank.com/challenges/making-candies/problem,search,,Hard,65,對答案（天數）做二分搜尋，注意乘法溢位與提早結束,
+HR,Mark and Toys,https://www.hackerrank.com/challenges/mark-and-toys/problem,greedy,sorting,Easy,20,排序後取最便宜，要能說明為何最佳,
+HR,Luck Balance,https://www.hackerrank.com/challenges/luck-balance/problem,greedy,sorting,Easy,20,可放棄的項目排序後取前 k 大,
+HR,Priyanka and Toys,https://www.hackerrank.com/challenges/priyanka-and-toys/problem,greedy,sorting,Easy,20,排序後以最小值開新容器，區間覆蓋,
+HR,Permuting Two Arrays,https://www.hackerrank.com/challenges/two-arrays/problem,greedy,sorting,Easy,20,一個升冪一個降冪配對，要能說明為何最佳,
+HR,Jim and the Orders,https://www.hackerrank.com/challenges/jim-and-the-orders/problem,greedy,sorting,Easy,20,按完成時間排序後輸出原始編號,
+HR,Max Min,https://www.hackerrank.com/challenges/angry-children/problem,greedy,sorting,Medium,30,排序後取連續 k 個，窗口最小差,2
+HR,Greedy Florist,https://www.hackerrank.com/challenges/greedy-florist/problem,greedy,sorting,Medium,35,由貴到便宜分配，貪婪順序決定答案,
+HR,Cutting Boards,https://www.hackerrank.com/challenges/board-cutting/problem,greedy,sorting,Hard,55,由貴到便宜切，切痕數量隨已切次數成長,
+HR,Chief Hopper,https://www.hackerrank.com/challenges/chief-hopper/problem,greedy,,Hard,50,從最後一棟往回推最低所需能量，倒著想比正著試簡單,
+HR,Maximum Element,https://www.hackerrank.com/challenges/maximum-element/problem,stacks_queues,,Easy,20,輔助堆疊同步記錄當前最大值,
+HR,Equal Stacks,https://www.hackerrank.com/challenges/equal-stacks/problem,stacks_queues,arrays,Easy,25,先算前綴高度，再同步往下退,
+HR,Balanced Brackets,https://www.hackerrank.com/challenges/balanced-brackets/problem,stacks_queues,,Medium,25,多種括號配對，型別也要相符,2
+HR,Queues: A Tale of Two Stacks,https://www.hackerrank.com/challenges/ctci-queue-using-two-stacks/problem,stacks_queues,,Medium,30,兩個堆疊模擬佇列，攤還複雜度,
+HR,Simple Text Editor,https://www.hackerrank.com/challenges/simple-text-editor/problem,stacks_queues,,Medium,40,用堆疊存操作紀錄來實作 undo,2
+HR,Castle on the Grid,https://www.hackerrank.com/challenges/castle-on-the-grid/problem,stacks_queues,,Medium,45,BFS 用佇列，一次滑到底才算一步,
+HR,Largest Rectangle,https://www.hackerrank.com/challenges/largest-rectangle/problem,stacks_queues,,Medium,50,單調堆疊進階，邊界哨兵的處理,3
+HR,Min Max Riddle,https://www.hackerrank.com/challenges/min-max-riddle/problem,stacks_queues,,Medium,55,每個元素當最小值的最大區間長度,
+HR,Truck Tour,https://www.hackerrank.com/challenges/truck-tour/problem,stacks_queues,arrays,Hard,50,環狀起點問題，前綴和轉折點即答案,
+HR,Poisonous Plants,https://www.hackerrank.com/challenges/poisonous-plants/problem,stacks_queues,,Hard,60,堆疊內記錄存活天數，單調性是關鍵,
+HR,Print the Elements of a Linked List,https://www.hackerrank.com/challenges/print-the-elements-of-a-linked-list/problem,linked_lists,,Easy,10,先把走訪寫熟，後面每一題都靠它,
+HR,Insert a node at a specific position in a linked list,https://www.hackerrank.com/challenges/insert-a-node-at-a-specific-position-in-a-linked-list/problem,linked_lists,,Easy,15,加 dummy head，頭節點就不用特判,
+HR,Reverse a linked list,https://www.hackerrank.com/challenges/reverse-a-linked-list/problem,linked_lists,,Easy,15,prev／cur／next 三個指針，畫圖再寫,
+HR,Inserting a Node Into a Sorted Doubly Linked List,https://www.hackerrank.com/challenges/insert-a-node-into-a-sorted-doubly-linked-list/problem,linked_lists,,Easy,20,雙向串列要同時接好 prev 與 next,
+HR,Find Merge Point of Two Lists,https://www.hackerrank.com/challenges/find-the-merge-point-of-two-joined-linked-lists/problem,linked_lists,,Easy,20,長度差先補齊，再同步往前走,
+HR,Cycle Detection,https://www.hackerrank.com/challenges/detect-whether-a-linked-list-contains-a-cycle/problem,linked_lists,,Medium,25,快慢指針，相遇即有環,
+HR,Recursion: Fibonacci Numbers,https://www.hackerrank.com/challenges/ctci-fibonacci-numbers/problem,recursion,,Easy,15,先寫終止條件，再寫縮小規模那一步,
+HR,Davis' Staircase,https://www.hackerrank.com/challenges/ctci-recursive-staircase/problem,recursion,,Medium,30,遞迴加記憶化，再改成迭代填表,
+HR,Recursive Digit Sum,https://www.hackerrank.com/challenges/recursive-digit-sum/problem,recursion,,Medium,25,先算一次再乘 k，不要真的展開字串,
+HR,The Power Sum,https://www.hackerrank.com/challenges/the-power-sum/problem,recursion,,Medium,35,回溯三件事：選擇、遞迴、撤銷選擇,
+HR,Crossword Puzzle,https://www.hackerrank.com/challenges/crossword-puzzle/problem,recursion,,Medium,50,回溯填字，撤銷選擇要還原整條線,
+HR,Tree: Preorder Traversal,https://www.hackerrank.com/challenges/tree-preorder-traversal/problem,trees,,Easy,15,「處理自己」放在第一行,
+HR,Tree: Inorder Traversal,https://www.hackerrank.com/challenges/tree-inorder-traversal/problem,trees,,Easy,15,二元搜尋樹的中序是遞增序列,
+HR,Tree: Postorder Traversal,https://www.hackerrank.com/challenges/tree-postorder-traversal/problem,trees,,Easy,15,「處理自己」放在最後一行,
+HR,Tree: Height of a Binary Tree,https://www.hackerrank.com/challenges/tree-height-of-a-binary-tree/problem,trees,,Easy,20,左右子樹的答案合起來，邊界是空節點,
+HR,Tree: Level Order Traversal,https://www.hackerrank.com/challenges/tree-level-order-traversal/problem,trees,,Easy,20,層序用佇列，要分層就先記當層長度,
+HR,Tree: Top View,https://www.hackerrank.com/challenges/tree-top-view/problem,trees,,Easy,25,記每個水平位置第一次出現的節點,
+HR,Binary Search Tree: Lowest Common Ancestor,https://www.hackerrank.com/challenges/binary-search-tree-lowest-common-ancestor/problem,trees,,Easy,25,利用 BST 的大小關係往一邊走,
+HR,Is This a Binary Search Tree?,https://www.hackerrank.com/challenges/is-binary-search-tree/problem,trees,,Medium,35,傳上下界下去，不能只比父子兩層,
+HR,Swap Nodes [Algo],https://www.hackerrank.com/challenges/swap-nodes-algo/problem,trees,,Medium,35,按深度交換左右子樹，遞迴帶層數,
+HR,Balanced Forest,https://www.hackerrank.com/challenges/balanced-forest/problem,trees,,Hard,70,子樹和＋雜湊表，情況分類要列完,
+HR,QHEAP1,https://www.hackerrank.com/challenges/qheap1/problem,heaps,,Easy,25,heapq 配一個已刪集合做延遲刪除,
+HR,Jesse and Cookies,https://www.hackerrank.com/challenges/jesse-and-cookies/problem,heaps,,Easy,25,一直取最小值才用堆，排一次用 sorted 就好,
+HR,Find the Running Median,https://www.hackerrank.com/challenges/find-the-running-median/problem,heaps,,Hard,50,最大堆配最小堆，兩邊維持平衡,
+HR,Roads and Libraries,https://www.hackerrank.com/challenges/torque-and-development/problem,graphs,,Medium,40,算連通塊數量，再比兩種成本,3
+HR,Journey to the Moon,https://www.hackerrank.com/challenges/journey-to-the-moon/problem,graphs,,Medium,45,連通塊大小的兩兩配對計數,3
+HR,Find the nearest clone,https://www.hackerrank.com/challenges/find-the-nearest-clone/problem,graphs,,Medium,40,多起點 BFS，同色節點一起下水,
+HR,Even Tree,https://www.hackerrank.com/challenges/even-tree/problem,graphs,,Medium,35,子樹大小為偶數就可以切一刀,
+HR,BFS: Shortest Reach in a Graph,https://www.hackerrank.com/challenges/ctci-bfs-shortest-reach/problem,graphs,,Hard,35,無權圖最短路是 BFS，不是 Dijkstra,3
+HR,Matrix,https://www.hackerrank.com/challenges/matrix/problem,graphs,,Hard,70,由大到小加邊的反向思考（並查集）,
+HR,Max Array Sum,https://www.hackerrank.com/challenges/max-array-sum/problem,dp_1d,,Medium,35,dp[i] 只依賴前兩項，空間可壓成常數,3
+HR,The Coin Change Problem,https://www.hackerrank.com/challenges/coin-change/problem,dp_1d,,Medium,40,硬幣在外層、金額在內層才不會重複計數,3
+HR,Fibonacci Modified,https://www.hackerrank.com/challenges/fibonacci-modified/problem,dp_1d,,Medium,30,Python 整數無上限，但要注意項數成長,
+HR,Candies,https://www.hackerrank.com/challenges/candies/problem,dp_1d,,Medium,45,左右各掃一次再取最大，一次掃不完,3
+HR,Abbreviation,https://www.hackerrank.com/challenges/abbr/problem,dp_2d,,Medium,45,dp[i][j]＝各取前 i、前 j 個；邊界先初始化,
+HR,Unbounded Knapsack,https://www.hackerrank.com/challenges/unbounded-knapsack/problem,dp_2d,,Medium,40,容量當維度，同一物品可重複取,
+HR,The Grid Search,https://www.hackerrank.com/challenges/the-grid-search/problem,two_d_arrays,,Medium,35,邊界檢查寫成一個函式，不要每次寫四個條件,
+HR,Queen's Attack II,https://www.hackerrank.com/challenges/queens-attack-2/problem,two_d_arrays,,Medium,40,八個方向各取最近障礙，不要逐格走,
+HR,Ema's Supercomputer,https://www.hackerrank.com/challenges/two-pluses/problem,two_d_arrays,,Medium,45,先列出所有可行十字，再兩兩檢查不重疊,
+HR,Forming a Magic Square,https://www.hackerrank.com/challenges/magic-square-forming/problem,two_d_arrays,,Medium,35,只有八個合法解，直接枚舉比推導快,
+HR,Lonely Integer,https://www.hackerrank.com/challenges/lonely-integer/problem,bit_manipulation,,Easy,15,XOR 自己等於 0，一次掃完,
+HR,Flipping bits,https://www.hackerrank.com/challenges/flipping-bits/problem,bit_manipulation,,Easy,20,固定 32 位元，Python 要自己遮罩,
+HR,Maximizing XOR,https://www.hackerrank.com/challenges/maximizing-xor/problem,bit_manipulation,,Easy,20,最高位不同的那一位決定答案,
+HR,Sum vs XOR,https://www.hackerrank.com/challenges/sum-vs-xor/problem,bit_manipulation,,Easy,25,n 的 0 位元個數決定答案數量,
+HR,Counter game,https://www.hackerrank.com/challenges/counter-game/problem,bit_manipulation,,Medium,30,x & (x-1) 消最低位的 1，數步數定勝負,
+HR,Handshake,https://www.hackerrank.com/challenges/handshake/problem,math_number_theory,,Easy,10,"組合數 C(n,2)：n 人兩兩握手一次",
+HR,Restaurant,https://www.hackerrank.com/challenges/restaurant/problem,math_number_theory,,Easy,15,最大公因數，math.gcd 可直接用,
+HR,Halloween Sale,https://www.hackerrank.com/challenges/halloween-sale/problem,math_number_theory,,Easy,20,等比遞減取整，注意下界,
+HR,Sherlock and Divisors,https://www.hackerrank.com/challenges/sherlock-and-divisors/problem,math_number_theory,,Easy,20,只枚舉到 sqrt(n)，成對計入,
+HR,Maximum Draws,https://www.hackerrank.com/challenges/maximum-draws/problem,math_number_theory,,Easy,10,鴿籠原理，答案是 n+1,
+HR,Is Fibo,https://www.hackerrank.com/challenges/is-fibo/problem,math_number_theory,,Medium,20,先推出封閉形式或預先建表，再決定怎麼查,
+HR,Time Complexity: Primality,https://www.hackerrank.com/challenges/ctci-big-o/problem,math_number_theory,,Medium,25,只試到 sqrt(n)，質數判斷的標準做法,
+HR,Contacts,https://www.hackerrank.com/challenges/contacts/problem,tries,,Medium,50,節點用 dict 存子節點，順手記前綴計數,
+HR,No Prefix Set,https://www.hackerrank.com/challenges/no-prefix-set/problem,tries,,Hard,45,插入時同時檢查兩個方向的前綴衝突,
+HR,Flipping the Matrix,https://www.hackerrank.com/challenges/flipping-the-matrix/problem,misc,,Medium,40,每個位置只有四個候選，取最大即可,
+HR,Almost Sorted,https://www.hackerrank.com/challenges/almost-sorted/problem,misc,,Medium,40,先找出不合序的位置，再分類討論,
+HR,Maximum Xor,https://www.hackerrank.com/challenges/maximum-xor/problem,misc,,Medium,40,把數字建成字典樹，逐位走相反方向,
+HR,Friend Circle Queries,https://www.hackerrank.com/challenges/friend-circle-queries/problem,misc,,Medium,60,並查集，同時維護最大集合大小,

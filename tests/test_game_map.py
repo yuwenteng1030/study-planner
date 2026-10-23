@@ -275,3 +275,45 @@ def test_valid_map_actions_pass(kind: str) -> None:
 )
 def test_bad_map_actions_are_ignored(action) -> None:
     assert parse_map_action(action, {1, 7, 8}) is None
+
+
+# ---------------------------------------------------------------------------
+# 重點路線與經驗值
+# ---------------------------------------------------------------------------
+
+
+def _s(task_id: int, difficulty: str = "Easy", done: bool = False, zone: int = 1):
+    from core.game_map import Stage
+
+    return Stage(task_id=task_id, title=f"T{task_id}", difficulty=difficulty,
+                 topic_id="a", topic_name="A", zone=zone, done=done)
+
+
+def test_focus_route_keeps_only_focus_tasks_grouped_by_stage_in_route_order() -> None:
+    from core.game_map import focus_route
+
+    stages = [_s(1), _s(2), _s(3), _s(4), _s(5)]
+    route = focus_route(stages, {5: 1, 2: 2, 4: 1})
+    # 第一段（4、5，照原路線順序）→ 第二段（2）；區號＝階段減一
+    assert [(s.task_id, s.zone) for s in route] == [(4, 0), (5, 0), (2, 1)]
+
+
+def test_experience_weights_medium_and_hard_more() -> None:
+    from core.game_map import experience
+
+    exp = experience([_s(1, "Easy", True), _s(2, "Medium", True), _s(3, "Hard", True), _s(4, "Hard")])
+    assert exp.xp == 85 and exp.level == 1 and exp.into_level == 85
+    assert experience([_s(i, "Hard", True) for i in range(3)]).level == 2  # 150 XP
+
+
+def test_real_focus_set_is_thirty_tasks_in_three_stages() -> None:
+    import csv
+    from collections import Counter
+    from pathlib import Path
+
+    rows = list(csv.DictReader((Path(__file__).parent.parent / "data" / "tasks.csv").open(encoding="utf-8")))
+    stages = Counter(r["focus"] for r in rows if r["focus"])
+    assert sum(stages.values()) == 30 and set(stages) == {"1", "2", "3"}
+    # 考卷以 Medium 為主：重點題組裡 Medium 要過半
+    diffs = Counter(r["difficulty"] for r in rows if r["focus"])
+    assert diffs["Medium"] > 15

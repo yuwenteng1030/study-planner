@@ -22,7 +22,16 @@ if str(_ROOT) not in sys.path:
 
 from api.deps import get_current_user  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
-from core.game_map import Stage, bear_stage, build_map, build_stages, parse_map_action  # noqa: E402
+from core.game_map import (  # noqa: E402
+    FOCUS_ZONE_NAMES,
+    Stage,
+    bear_stage,
+    build_map,
+    build_stages,
+    experience,
+    focus_route,
+    parse_map_action,
+)
 from core.map_art import render_svg, safe_url, zone_theme  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.quota import DbLedger  # noqa: E402
@@ -258,6 +267,7 @@ def main() -> None:
         # 先檢查要不要重排，地圖上的「今天」才會跟今日任務頁一致
         replanned = repo.ensure_replanned(session, plan, today) if plan is not None else None
         marks = repo.plan_marks(plan, today)
+        focus_stages = repo.load_focus_stages(session)
 
     if not tasks:
         st.info("還沒有題庫。先執行 `python -m scripts.import_data` 匯入題庫。")
@@ -268,7 +278,14 @@ def main() -> None:
         st.info("你有進度落後，已經把未完成的題目重排到今天之後。細節在「今日任務」頁。", icon="🔁")
 
     levels = build_map(topics, tasks, done_ids)
-    stages = build_stages(levels, tasks, done_ids)
+    all_stages = build_stages(levels, tasks, done_ids)
+    focus_only = bool(focus_stages) and st.toggle(
+        f"只看重點路線（{len(focus_stages)} 關）",
+        value=True,
+        key="map_focus_only",
+        help="依上機考型態挑的重點題組，分暖身 → Medium 主力 → 進階三段。關掉就顯示整個題庫。",
+    )
+    stages = focus_route(all_stages, focus_stages) if focus_only else all_stages
     if not stages:
         st.info("題庫裡的題目都對不上知識地圖的主題，畫不出關卡。重新匯入題庫試試。")
         return
@@ -291,7 +308,7 @@ def main() -> None:
         st.error(error)
 
     done = sum(s.done for s in stages)
-    st.progress(done / len(stages), text=f"全部 {done} / {len(stages)} 關")
+    _render_hud(all_stages, done, len(stages), focus_only)
 
     focus_id = st.session_state.get(FOCUS_KEY)
     if focus_id == "next":
@@ -301,9 +318,13 @@ def main() -> None:
 
     _render_next_panel(here, urls, all_done=done == len(stages), today=here_is_today)
     if marks.today or marks.overdue:
-        today_left = sum(1 for t in marks.today if t in by_id and not by_id[t].done)
+        # 用整個題庫算：重點路線只畫一部分，用畫出來的關卡算會少數今天的任務
+        all_by_id = {s.task_id: s for s in all_stages}
+        today_left = sum(1 for t in marks.today if t in all_by_id and not all_by_id[t].done)
+        hidden = sum(1 for t in marks.today if t not in by_id)
         st.caption(
             f"🔵 藍圈＝今天的任務（還剩 {today_left} / {len(marks.today)} 題）"
+            + (f"，其中 {hidden} 題不在重點路線上（關掉上面的開關就看得到）" if hidden else "")
             + (f"　🔴 紅圈＝過期還沒做（{len(marks.overdue)} 題，到「今日任務」按重排）" if marks.overdue else "")
         )
 
@@ -313,6 +334,10 @@ def main() -> None:
             "svg": render_svg(
                 stages, urls, here.task_id if here else None,
                 today_ids=frozenset(marks.today), overdue_ids=marks.overdue,
+                # 整個題庫時才標星：重點路線裡每一關都是重點
+                focus_ids=frozenset() if focus_only else frozenset(focus_stages),
+                zone_names=FOCUS_ZONE_NAMES if focus_only else None,
+                by_topic=not focus_only,
             ),
             "here": here.task_id if here else None,
             "focus": _focus_payload(focus, urls) if focus else None,
@@ -327,6 +352,16 @@ def main() -> None:
             "　⭐⭐ 二星：Medium 做一半　⭐⭐⭐ 三星：Hard 全做（沒有 Hard 就 Medium 全做）。"
             "星等只是進度，不會鎖住後面的關卡。"
         )
+        if focus_only:
+            for zone in sorted({s.zone for s in stages}):
+                members = [s for s in stages if s.zone == zone]
+                st.subheader(f"{FOCUS_ZONE_NAMES.get(zone, zone_theme(zone)[0])}　{sum(s.done for s in members)}/{len(members)}")
+                st.markdown("\n".join(
+                    f"- {'✅' if s.done else '⬜'} [{_md(s.title)}]({safe_url(urls.get(s.task_id)) or '#'})"
+                    f"（{_md(s.topic_name)}・{s.difficulty}）"
+                    for s in members
+                ))
+            return
         for zone in sorted({s.zone for s in stages}):
             st.subheader(zone_theme(zone)[0])
             for level in (lv for lv in levels if lv.zone == zone and not lv.is_concept_only):
@@ -367,6 +402,16 @@ def _focus_payload(stage: Stage, urls: dict[int, str]) -> dict:
         # 最後一關做完時小熊停在終點（已完成），照樣要說一聲過關
         "cleared": cleared,
     }
+
+
+def _render_hud(all_stages: list[Stage], done: int, total: int, focus_only: bool) -> None:
+    """遊戲的狀態列：等級與經驗值（整個題庫算）、這條路線的進度。"""
+    exp = experience(all_stages)
+    left, mid, right = st.columns(3)
+    left.metric("等級", f"Lv. {exp.level}", help="Easy 10、Medium 25、Hard 50 經驗值；每 100 升一級")
+    mid.metric("經驗值", f"{exp.xp} XP")
+    right.metric("重點路線" if focus_only else "全部關卡", f"{done} / {total}")
+    st.progress(exp.ratio, text=f"再 {exp.per_level - exp.into_level} XP 升到 Lv. {exp.level + 1}")
 
 
 def _render_next_panel(

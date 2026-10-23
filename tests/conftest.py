@@ -89,6 +89,7 @@ def seeded_app_db() -> Path:
                             difficulty=row["difficulty"],
                             est_minutes=int(row["est_minutes"]),
                             static_note=row["static_note"] or None,
+                            focus_stage=int(row["focus"]) if row.get("focus") else None,
                         )
                     )
             session.add(
@@ -129,6 +130,7 @@ def seed_global_data(session) -> None:
                     difficulty=row["difficulty"],
                     est_minutes=int(row["est_minutes"]),
                     static_note=row["static_note"] or None,
+                    focus_stage=int(row["focus"]) if row.get("focus") else None,
                 )
             )
     session.flush()

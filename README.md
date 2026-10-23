@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，294 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，303 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -17,6 +17,19 @@
 | 時間估計 | 猜的 | 從你實際花的時間反推校正 |
 | 落後了 | 要自己再問一次 | 自動重排，主動提醒 |
 | 沒被選上的項目 | 不會提 | 說得出為什麼沒選（容量不足／分數較低／前置未滿足） |
+
+## 重點題組（先練這 30 題）
+
+題庫 125 題對「先準備上機考」來說太多。依常見的企業上機考型態（3 題、90 分鐘，以陣列／字串處理與 Medium 為主，偶有圖與 DP）挑出 30 題，分三段：
+
+| 段 | 題數 | 內容 |
+|---|---|---|
+| 暖身 | 6 | Counter／defaultdict、旋轉與重複字串、字串交集、雜湊查表——把語法與輸入輸出練到不卡手 |
+| Medium 主力 | 14 | 陣列（New Year Chaos、Sparse Arrays）、字串與雜湊（Sherlock 系列、Count Triplets、Frequency Queries）、排序與二分（Minimum Swaps 2、Fraudulent Activity、Pairs、Minimum Time Required）、Greedy、Stack |
+| 進階 | 10 | 圖（Roads and Libraries、Journey to the Moon、BFS）、DP（Max Array Sum、Coin Change、Candies、Common Child）、單調堆疊，加上 3 題 Hard（拿部分分數用） |
+
+合計 Medium 21 題、Hard 3 題、約 1035 分鐘。首頁預設「只排重點題組」，學習地圖預設「只看重點路線」；做完再關掉開關，排其餘的題目。
+挑選是 `data/tasks.csv` 的 `focus` 欄（1／2／3），不動評分公式：重點題組只是縮小排程的輸入。
 
 ## 評分公式
 
@@ -182,7 +195,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 294 個測試
+pytest -q                          # 303 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
@@ -221,6 +234,7 @@ streamlit run app/Home.py
 | `tests/test_clock.py` | 時區：台灣早上 7 點已經是今天（UTC 還是昨天）、UTC 時間戳換成使用者的日期、壞掉的時區不會讓網站打不開 |
 | `tests/test_daily_replan.py` | 每天只重排一次：同一天第二次不寫入、隔天會再檢查、另一個分頁先搶到就不重排 |
 | `tests/test_quota_db.py` | 額度存資料庫：重開不歸零、退回沒用到的次數、不同用途分開算 |
+| `tests/test_game_map.py`（續） | 重點路線依階段分區、經驗值（Easy 10／Medium 25／Hard 50）、重點題組 30 題且 Medium 過半 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
 UI 冒煙測試不是裝飾：`pytest` 全綠、伺服器回 200、log 乾淨的情況下，打勾功能曾經是一個無窮迴圈——`st.rerun()` 用拋例外實作，而那個例外會讓外層的交易 rollback，於是每次重跑都再標記一次。只有真的去點那個 checkbox 才會發現。

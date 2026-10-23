@@ -255,7 +255,8 @@ def _render_item(session, item, show_key_points: bool = True) -> None:
             title = f"~~{task.title}~~" if done else f"**{task.title}**"
             st.markdown(
                 f"{icon} {title}　"
-                f"`{tier}`　`{task.difficulty}`　`預估 {task.est_minutes} 分鐘`"
+                + ("`⭐ 重點`　" if task.focus_stage else "")
+                + f"`{tier}`　`{task.difficulty}`　`預估 {task.est_minutes} 分鐘`"
             )
             st.markdown(f"[在 HackerRank 開啟題目]({task.url})")
             _map_link(task.id)

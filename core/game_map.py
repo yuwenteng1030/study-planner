@@ -252,3 +252,50 @@ def parse_map_action(action: object, known_ids: Iterable[int]) -> tuple[str, int
     if not isinstance(task, int) or isinstance(task, bool) or task not in set(known_ids):
         return None
     return kind, task
+
+
+# ---------------------------------------------------------------------------
+# 重點路線與經驗值（遊戲化的外觀，2026-10-23）
+# ---------------------------------------------------------------------------
+
+#: 重點路線三段的名字（區號 0、1、2）。
+FOCUS_ZONE_NAMES: dict[int, str] = {0: "第一段・暖身", 1: "第二段・Medium 主力", 2: "第三段・進階"}
+
+
+def focus_route(stages: list[Stage], focus_stages: dict[int, int]) -> list[Stage]:
+    """只留重點題組，依階段（暖身 → Medium 主力 → 進階）重新分區。
+
+    同一段裡沿用原本路線的順序（主題的前置關係、Easy → Hard），所以每一段仍然是
+    「先基礎後進階」。區號＝階段減一，畫成三條色帶。
+    """
+    from dataclasses import replace
+
+    picked = [
+        (focus_stages[s.task_id], i, s) for i, s in enumerate(stages) if s.task_id in focus_stages
+    ]
+    picked.sort(key=lambda t: (t[0], t[1]))
+    return [replace(s, zone=stage - 1) for stage, _, s in picked]
+
+
+#: 每題的經驗值：Medium 是考卷的主體，Hard 是拉開差距的那一題。
+XP_BY_DIFFICULTY: dict[str, int] = {"Easy": 10, "Medium": 25, "Hard": 50}
+#: 每升一級要的經驗值
+XP_PER_LEVEL = 100
+
+
+@dataclass(frozen=True)
+class Experience:
+    xp: int
+    level: int
+    into_level: int  # 這一級已經累積多少
+    per_level: int = XP_PER_LEVEL
+
+    @property
+    def ratio(self) -> float:
+        return self.into_level / self.per_level
+
+
+def experience(stages: list[Stage]) -> Experience:
+    """做完的題目換算成經驗值與等級。只是畫面上的回饋，不影響排程。"""
+    xp = sum(XP_BY_DIFFICULTY.get(s.difficulty, 10) for s in stages if s.done)
+    return Experience(xp=xp, level=xp // XP_PER_LEVEL + 1, into_level=xp % XP_PER_LEVEL)

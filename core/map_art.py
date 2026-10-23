@@ -11,6 +11,13 @@
   主題名寫在左邊的欄位裡。
 - 排與排之間 S 形折返：下一排從上一排**最後一關的那一側**開始。
 - 每一關是一個連到 HackerRank 題目的連結；小熊站在路線上第一個還沒做的關卡上。
+
+遊戲化的外觀（2026-10-23，AI 決定，只影響畫面）：
+
+- 關卡上寫**關卡編號**（第幾關），難度用外框顏色表示；Hard 是 **Boss 關**（大一號、戴皇冠）。
+- 走過的路變金色：前後兩關都做完的那一段小路畫成金色，一眼看得出走到哪裡。
+- 每一區的標題列有自己的裝飾（草原、森林、雪山），起點有城堡、終點有獎盃。
+- 重點題組的關卡右上角有一顆星（只在顯示整個題庫時畫，重點路線裡每關都是重點）。
 """
 
 from __future__ import annotations
@@ -26,6 +33,8 @@ WIDTH = 640
 GUTTER = 150  # 左邊放主題名的欄位寬
 PER_ROW = 5
 COLUMNS: tuple[float, ...] = (200, 300, 400, 500, 600)
+#: 重點路線沒有左欄的主題名，關卡往左展開用滿寬度
+FOCUS_COLUMNS: tuple[float, ...] = (110, 232, 354, 476, 598)
 ROW_HEIGHT = 62
 BAND_HEADER = 46  # 色帶上方放區名的高度
 NODE_R = 17
@@ -55,6 +64,14 @@ DIFFICULTY_MARK: dict[str, tuple[str, str]] = {
 
 GOLD = "#FFD66B"
 INK = "#4A3728"
+#: 走過的路
+PATH_DONE = "#F2B84B"
+
+#: Boss 關（Hard）比一般關卡大多少
+BOSS_EXTRA = 4
+
+#: 每一區標題列的裝飾（只是畫面）。emoji 用 SVG 文字畫，不用外部圖檔。
+ZONE_DECOR: dict[int, str] = {0: "🏰", 1: "🌼 🌾 🌼", 2: "🌲 🍄 🌲", 3: "⛰️ ❄️ ⛰️"}
 
 
 def zone_theme(zone: int) -> tuple[str, str, str]:
@@ -105,42 +122,56 @@ def _topics_in_order(stages: list[Stage]) -> list[list[Stage]]:
     return groups
 
 
-def layout(stages: list[Stage]) -> tuple[list[Placed], list[Band], list[TopicLabel], float]:
+def layout(
+    stages: list[Stage], *, by_topic: bool = True
+) -> tuple[list[Placed], list[Band], list[TopicLabel], float]:
     """回傳（照路線順序的關卡座標, 每區色帶, 主題名, 圖高）。
 
     ``stages`` 要是 ``build_stages`` 排好的順序；這裡不重排，只照順序擺。
+    ``by_topic=False``（重點路線）：同一區的關卡不分主題、每排 ``PER_ROW`` 關連續排，
+    也不畫左欄的主題名——重點路線一個主題常常只有 1～2 題，分主題會排成一堆半空的排。
     """
-    groups = _topics_in_order(stages)
+    if by_topic:
+        groups = _topics_in_order(stages)
+    else:
+        groups = []
+        for stage in stages:
+            if groups and groups[-1][0].zone == stage.zone:
+                groups[-1].append(stage)
+            else:
+                groups.append([stage])
     zones = sorted({s.zone for s in stages})
     by_zone = {z: [g for g in groups if g[0].zone == z] for z in zones}
     height = sum(
         BAND_HEADER + sum(_rows(len(g)) for g in by_zone[z]) * ROW_HEIGHT for z in zones
     )
 
+    columns = COLUMNS if by_topic else FOCUS_COLUMNS
     placed: list[Placed] = []
     bands: list[Band] = []
     labels: list[TopicLabel] = []
     bottom = height
     left_to_right = True
-    middle = (COLUMNS[0] + COLUMNS[-1]) / 2
+    middle = (columns[0] + columns[-1]) / 2
     for z in zones:
         rows_in_zone = sum(_rows(len(g)) for g in by_zone[z])
         top = bottom - BAND_HEADER - rows_in_zone * ROW_HEIGHT
         bands.append(Band(zone=z, top=top, bottom=bottom))
         row_bottom = bottom
         for group in by_zone[z]:
-            labels.append(
-                TopicLabel(
-                    topic_id=group[0].topic_id,
-                    name=group[0].topic_name,
-                    y=row_bottom - ROW_HEIGHT / 2,
-                    done=sum(s.done for s in group),
-                    total=len(group),
+            if by_topic:
+                labels.append(
+                    TopicLabel(
+                        topic_id=group[0].topic_id,
+                        name=group[0].topic_name,
+                        y=row_bottom - ROW_HEIGHT / 2,
+                        done=sum(s.done for s in group),
+                        total=len(group),
+                    )
                 )
-            )
             for r in range(_rows(len(group))):
                 chunk = group[r * PER_ROW : (r + 1) * PER_ROW]
-                cols = COLUMNS if left_to_right else tuple(reversed(COLUMNS))
+                cols = columns if left_to_right else tuple(reversed(columns))
                 y = row_bottom - ROW_HEIGHT / 2
                 placed.extend(Placed(s, cols[i], y) for i, s in enumerate(chunk))
                 # 下一排從這一排結束的那一側開始
@@ -232,17 +263,20 @@ TODAY_RING = "#2F7FD1"
 OVERDUE_RING = "#D9534F"
 
 
-def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "") -> str:
+def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
+          level: int = 0, focus: bool = False) -> str:
     s = p.stage
     x, y = p.x, p.y
     letter, color = DIFFICULTY_MARK.get(s.difficulty, ("?", INK))
+    boss = s.difficulty == "Hard"
+    r = NODE_R + (BOSS_EXTRA if boss else 0)
     status = "已完成" if s.done else "未完成"
     when = {"today": "，今天的任務", "overdue": "，過期還沒做"}.get(plan_tag, "")
-    tip = f"{s.title}（{s.difficulty}，{status}{when}）"
+    tip = f"第 {level} 關：{s.title}（{s.difficulty}{'・Boss' if boss else ''}，{status}{when}）"
 
     classes = (
         "stage" + (" done" if s.done else "") + (" here" if is_here else "")
-        + (f" {plan_tag}" if plan_tag else "")
+        + (" boss" if boss else "") + (f" {plan_tag}" if plan_tag else "")
     )
     # 有網址就是真的 <a>：就算畫面的 JavaScript 沒跑起來，點下去照樣能開題目
     href = (
@@ -252,26 +286,31 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "") -> str:
     )
     tag = "a" if url else "g"
     parts = [
-        f'<{tag} class="{classes}" data-task="{int(s.task_id)}"{href}>',
+        f'<{tag} class="{classes}" data-task="{int(s.task_id)}" data-difficulty="{letter}"{href}>',
         f"<title>{escape(tip)}</title>",
-        f'<circle cx="{x:.1f}" cy="{y + 3:.1f}" r="{NODE_R + 2}" fill="#000" opacity="0.10"/>',
+        f'<circle cx="{x:.1f}" cy="{y + 3:.1f}" r="{r + 2}" fill="#000" opacity="0.12"/>',
     ]
     if plan_tag:
         ring = TODAY_RING if plan_tag == "today" else OVERDUE_RING
         parts.append(
-            f'<circle class="plan-ring" cx="{x:.1f}" cy="{y:.1f}" r="{NODE_R + 4}" fill="none" '
+            f'<circle class="plan-ring" cx="{x:.1f}" cy="{y:.1f}" r="{r + 4}" fill="none" '
             f'stroke="{ring}" stroke-width="3"/>'
         )
     if s.done:
         parts.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{NODE_R}" fill="{GOLD}" stroke="#E8A33A" stroke-width="3"/>'
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{GOLD}" stroke="#E8A33A" stroke-width="3"/>'
+            f'<circle cx="{x - r / 3:.1f}" cy="{y - r / 3:.1f}" r="{r / 4:.1f}" fill="#FFF6D5" opacity="0.8"/>'
             f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{INK}">✓</text>'
         )
     else:
         parts.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{NODE_R}" fill="#FFFFFF" stroke="{color}" stroke-width="3"/>'
-            f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{color}">{letter}</text>'
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="#FFFFFF" stroke="{color}" stroke-width="{4 if boss else 3}"/>'
+            f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{color}">{level}</text>'
         )
+    if boss:
+        parts.append(f'<text x="{x:.1f}" y="{y - r - 3:.1f}" class="crown">👑</text>')
+    if focus:
+        parts.append(f'<text x="{x + r - 2:.1f}" y="{y - r + 6:.1f}" class="focus-star">⭐</text>')
     parts.append(f"</{tag}>")
     return "".join(parts)
 
@@ -283,7 +322,8 @@ def _label_x(band: Band, placed: list[Placed], width: float) -> float:
     """
     members = [p for p in placed if p.stage.zone == band.zone]
     above = [p for p in placed if p.y < band.top]
-    middle = (COLUMNS[0] + COLUMNS[-1]) / 2
+    xs = [p.x for p in placed] or [COLUMNS[0], COLUMNS[-1]]
+    middle = (min(xs) + max(xs)) / 2
     exit_x = (members[-1].x + above[0].x) / 2 if members and above else middle
     return WIDTH - 16 - width if exit_x < middle else GUTTER
 
@@ -294,13 +334,17 @@ def render_svg(
     here_id: int | None,
     today_ids: frozenset[int] | set[int] = frozenset(),
     overdue_ids: frozenset[int] | set[int] = frozenset(),
+    focus_ids: frozenset[int] | set[int] = frozenset(),
+    zone_names: dict[int, str] | None = None,
+    by_topic: bool = True,
 ) -> str:
     """整張地圖的 SVG 字串。寬度跟著容器縮放。
 
     ``here_id`` 是小熊站的關卡（通常是 ``next_stage``）。每一關都是 ``<a>``，
     帶 ``data-task``，頁面的 JavaScript 靠它知道點的是哪一題。
+    ``zone_names`` 可以換掉區名（重點路線用「暖身／Medium 主力／進階」）。
     """
-    placed, bands, labels, height = layout(stages)
+    placed, bands, labels, height = layout(stages, by_topic=by_topic)
     by_zone_done = {b.zone: (0, 0) for b in bands}
     for s in stages:
         d, t = by_zone_done[s.zone]
@@ -314,6 +358,10 @@ def render_svg(
         f".topic-count{{font-size:10px;fill:{INK};opacity:0.7}}"
         ".mark{font-size:13px;font-weight:800;text-anchor:middle}"
         ".zone{font-size:14px;font-weight:700;fill:#fff;text-anchor:middle}"
+        ".crown{font-size:14px;text-anchor:middle;pointer-events:none}"
+        ".focus-star{font-size:10px;text-anchor:middle;pointer-events:none}"
+        ".decor{font-size:16px;text-anchor:middle;pointer-events:none;opacity:0.9}"
+        ".goal{font-size:22px;text-anchor:middle;pointer-events:none}"
         ".stage{cursor:pointer}"
         ".stage:hover circle,.stage:focus circle{filter:brightness(0.93)}"
         "</style>",
@@ -321,6 +369,8 @@ def render_svg(
 
     for b in bands:
         name, bg, accent = zone_theme(b.zone)
+        if zone_names and b.zone in zone_names:
+            name = zone_names[b.zone]
         done, total = by_zone_done[b.zone]
         label = f"{name}　{done}/{total}"
         pill = 24 + len(label) * 13
@@ -330,6 +380,11 @@ def render_svg(
             f'<rect x="{pill_x:.1f}" y="{b.top + 10:.1f}" rx="13" width="{pill}" height="26" fill="{accent}"/>'
             f'<text x="{pill_x + pill / 2:.1f}" y="{b.top + 28:.1f}" class="zone">{escape(label)}</text>'
         )
+        # 裝飾緊貼在區名旁邊、朝地圖中間：區名本來就放在小路離開這一區的另一側
+        # （_label_x），放在另一側會壓到往上走的那段路
+        decor = ZONE_DECOR.get(b.zone, ZONE_DECOR[max(ZONE_DECOR)])
+        decor_x = pill_x + pill + 45 if pill_x < WIDTH / 2 else pill_x - 45
+        out.append(f'<text x="{decor_x:.1f}" y="{b.top + 30:.1f}" class="decor">{decor}</text>')
 
     for lab in labels:
         lines = _wrap(lab.name)
@@ -344,14 +399,32 @@ def render_svg(
     path = _smooth_path(points)
     out.append(
         f'<path d="{path}" fill="none" stroke="#D9C3A0" stroke-width="12" stroke-linecap="round"/>'
+    )
+    # 走過的路：前後兩關都做完的那一段畫成金色
+    for a, b in zip(placed, placed[1:]):
+        if a.stage.done and b.stage.done:
+            seg = _smooth_path([(a.x, a.y), (b.x, b.y)])
+            out.append(
+                f'<path class="walked" d="{seg}" fill="none" stroke="{PATH_DONE}" '
+                f'stroke-width="12" stroke-linecap="round"/>'
+            )
+    out.append(
         f'<path d="{path}" fill="none" stroke="#FFF8EA" stroke-width="3" '
         f'stroke-dasharray="2 9" stroke-linecap="round"/>'
     )
 
-    for p in placed:
+    if placed:
+        # 終點的獎盃放在最後一關旁邊（往空的那一側）
+        last = placed[-1]
+        gx = last.x + 40 if last.x + 40 < WIDTH - 12 else last.x - 40
+        out.append(f'<text x="{gx:.1f}" y="{last.y + 8:.1f}" class="goal">🏆</text>')
+
+    for level, p in enumerate(placed, start=1):
         tid = p.stage.task_id
         tag = "today" if tid in today_ids else "overdue" if tid in overdue_ids else ""
-        out.append(_node(p, safe_url(urls.get(tid)), tid == here_id, tag))
+        out.append(
+            _node(p, safe_url(urls.get(tid)), tid == here_id, tag, level=level, focus=tid in focus_ids)
+        )
 
     spot = next((p for p in placed if p.stage.task_id == here_id), None)
     if spot is not None:

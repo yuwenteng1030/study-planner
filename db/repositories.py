@@ -85,6 +85,12 @@ def load_task_brief(session: Session, task_id: int) -> tuple[str, str, str, int]
     return task.title, task.topic.name, task.difficulty, task.est_minutes
 
 
+def load_focus_stages(session: Session) -> dict[int, int]:
+    """重點題組：task id → 階段（1 暖身、2 Medium 主力、3 進階）。不在題組裡的題目不出現。"""
+    rows = session.execute(select(Task.id, Task.focus_stage).where(Task.focus_stage.is_not(None)))
+    return {task_id: stage for task_id, stage in rows}
+
+
 def load_prereq_closure(session: Session) -> dict[str, frozenset[str]]:
     """主題 id → 遞移前置主題集合。供重排時保護前置用。"""
     from core.planner import _prereq_closure

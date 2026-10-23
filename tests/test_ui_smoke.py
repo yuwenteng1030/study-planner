@@ -128,14 +128,21 @@ def _map_data(app) -> dict:
 
 
 def _map_done(app) -> int:
-    # 讀文字，不讀 ``.value``：Streamlit 把進度存成整數百分比，
-    # 1 / 125 ≒ 0.8% 會被截成 0，數值比對會誤判成「沒接上資料庫」。
-    return int(app.progress[0].proto.text.split()[1])  # 「全部 n / m 關」
+    # 狀態列的「全部關卡 n / m」（關掉重點路線時才是全部）
+    [metric] = [m for m in app.metric if m.label == "全部關卡"]
+    return int(str(metric.value).split("/")[0])
+
+
+def _full_map():
+    """打開學習地圖並關掉「只看重點路線」，看整個題庫。"""
+    app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT)
+    app.session_state["map_focus_only"] = False
+    return app.run()
 
 
 def test_map_page_draws_every_task_as_a_level(seeded_app_db) -> None:
     """地圖要畫出每一題一關、一隻小熊，文字版也要列出四個區域。"""
-    app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
+    app = _full_map()
     assert not app.exception, [str(e.value) for e in app.exception]
 
     data = _map_data(app)
@@ -151,7 +158,7 @@ def test_submit_button_clears_the_level_and_moves_the_bear(seeded_app_db) -> Non
     不管這一題在不在計畫裡（共用的測試資料庫可能已經有計畫），
     「寫到哪裡」由 ``test_map_completion.py`` 守，這裡確認按鈕真的接上了。
     """
-    app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
+    app = _full_map()
     before_done, before_here = _map_done(app), _map_data(app)["here"]
     assert before_done < 124, "前提不成立：共用的測試資料庫已經做到最後一關，小熊不會再走"
     before_title = app.markdown[0].value
@@ -179,7 +186,7 @@ def test_map_page_counts_tasks_checked_on_the_today_page(seeded_app_db) -> None:
     計數本身的正確性由 ``test_game_map.py`` 守；這裡確認頁面真的接到了資料庫。
     """
     def map_done() -> int:
-        app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
+        app = _full_map()
         assert not app.exception, [str(e.value) for e in app.exception]
         return _map_done(app)
 
@@ -409,3 +416,14 @@ def test_review_page_without_any_plan(seeded_app_db) -> None:
     app = AppTest.from_file(REVIEW_PAGE, default_timeout=TIMEOUT).run()
     assert not app.exception, [str(e.value) for e in app.exception]
     assert app.info, "應該提示先去排計畫"
+
+
+
+def test_map_opens_on_the_focus_route_by_default(seeded_app_db) -> None:
+    """預設只看重點路線：30 關、三段，狀態列有等級與經驗值。"""
+    app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+    data = _map_data(app)
+    assert data["svg"].count("data-task=") == 30
+    assert "第一段・暖身" in data["svg"] and "第三段・進階" in data["svg"]
+    assert {m.label for m in app.metric} >= {"等級", "經驗值", "重點路線"}

@@ -33,6 +33,12 @@ def engine(tmp_path: Path, monkeypatch):
     eng.dispose()
 
 
+def _latest() -> str:
+    from alembic.script import ScriptDirectory
+
+    return ScriptDirectory.from_config(session_mod._alembic_config()).get_current_head()
+
+
 def _head(eng) -> str:
     with eng.connect() as conn:
         return conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
@@ -44,13 +50,13 @@ def test_empty_database_is_built_to_match_the_models(engine) -> None:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
     # migration 建出來的 schema 跟 db/models.py 完全一致：改了 model 忘了寫 migration 會紅
     assert diff == []
-    assert _head(engine) == "0002"
+    assert _head(engine) == _latest()
 
 
 def test_running_twice_is_harmless(engine) -> None:
     session_mod.upgrade_to_head()
     session_mod.upgrade_to_head()
-    assert _head(engine) == "0002"
+    assert _head(engine) == _latest()
 
 
 def _legacy_schema(eng, *, with_reason_source: bool) -> None:
@@ -91,7 +97,7 @@ def test_legacy_database_is_adopted_and_upgraded(engine) -> None:
 
     session_mod.upgrade_to_head()
 
-    assert _head(engine) == "0002"
+    assert _head(engine) == _latest()
     insp = inspect(engine)
     assert "reason_source" in {c["name"] for c in insp.get_columns("plan_items")}
     assert "tz" in {c["name"] for c in insp.get_columns("users")}
@@ -125,7 +131,7 @@ def test_second_active_plan_is_rejected_by_the_database(engine) -> None:
 def test_database_built_by_create_all_is_stamped_as_latest(engine) -> None:
     Base.metadata.create_all(engine)
     session_mod.upgrade_to_head()
-    assert _head(engine) == "0002"
+    assert _head(engine) == _latest()
 
 
 def test_downgrade_and_upgrade_again_keep_the_data(engine) -> None:
@@ -148,7 +154,7 @@ def test_downgrade_and_upgrade_again_keep_the_data(engine) -> None:
         conn.commit()
     assert _head(engine) == "0001"
     session_mod.upgrade_to_head()
-    assert _head(engine) == "0002"
+    assert _head(engine) == _latest()
     with engine.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM plans")).scalar_one() == 1
         # 外鍵檢查在 migration 之後恢復

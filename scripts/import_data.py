@@ -160,6 +160,7 @@ def import_all(reset: bool = False) -> dict[str, int]:
                 "difficulty": row["difficulty"].strip(),
                 "est_minutes": int(row["est_minutes"]),
                 "static_note": (row.get("static_note") or "").strip() or None,
+                "focus_stage": int(row["focus"]) if (row.get("focus") or "").strip() else None,
             }
             if task is None:
                 session.add(Task(url=url, **values))

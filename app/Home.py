@@ -51,6 +51,7 @@ def main() -> None:
         done_ids = repo.load_completed_task_ids_for_user(session, get_current_user())
         topic_names = {t.id: t.name for t in topics}
         today = repo.user_today(session, get_current_user())
+        focus = repo.load_focus_stages(session)
 
     if not tasks:
         st.error(
@@ -108,6 +109,18 @@ def main() -> None:
             format_func=lambda tid: topic_names.get(tid, tid),
         )
 
+        st.subheader("4. 範圍")
+        focus_only = st.toggle(
+            f"只排重點題組（{len(focus)} 題）",
+            value=bool(focus),
+            disabled=not focus,
+            help=(
+                "依上機考的型態挑的：3 題 90 分鐘，以陣列／字串處理與 Medium 為主。"
+                "分三段：暖身 → Medium 主力 → 進階（圖、DP、少量 Hard）。"
+                "做完再關掉這個開關，排其餘的題目。"
+            ),
+        )
+
         submitted = st.form_submit_button("排出計畫", type="primary")
 
     if not submitted:
@@ -129,6 +142,11 @@ def main() -> None:
 
     # 做過的題目（任何一份計畫裡打過勾，或在學習地圖上完成的）不再排進新計畫
     remaining = [t for t in tasks if t.id not in done_ids]
+    if focus_only:
+        remaining = [t for t in remaining if t.id in focus]
+        if not remaining:
+            st.success("🏆 重點題組 30 題都做過了。關掉「只排重點題組」，排其餘的題目。")
+            return
     if not remaining:
         st.success("🏆 題庫裡每一題都做過了，沒有新的題目可以排。")
         return

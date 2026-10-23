@@ -69,6 +69,7 @@ def session(tmp_path: Path) -> Iterator[Session]:
                         difficulty=row["difficulty"],
                         est_minutes=int(row["est_minutes"]),
                         static_note=row["static_note"] or None,
+                        focus_stage=int(row["focus"]) if row.get("focus") else None,
                     )
                 )
         db.add(User(id=USER_ID, email="test@example.com", display_name="測試"))
