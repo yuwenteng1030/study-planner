@@ -126,3 +126,30 @@ def test_database_built_by_create_all_is_stamped_as_latest(engine) -> None:
     Base.metadata.create_all(engine)
     session_mod.upgrade_to_head()
     assert _head(engine) == "0002"
+
+
+def test_downgrade_and_upgrade_again_keep_the_data(engine) -> None:
+    """0002 的 downgrade 在有資料、外鍵開著的資料庫上也要能跑（SQLite batch 會重建 users 表）。"""
+    from alembic import command
+
+    session_mod.upgrade_to_head()
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO users (id,email,display_name,daily_api_quota) VALUES (1,'a@b','me',50)"))
+        conn.execute(text("INSERT INTO plans (user_id,goal_text,parsed_goal,start_date,days,daily_minutes,level,status) "
+                          "VALUES (1,'g','{}','2026-10-01',3,60,'normal','active')"))
+    cfg = session_mod._alembic_config()
+    with engine.connect() as conn:
+        conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        conn.commit()
+        with conn.begin():
+            cfg.attributes["connection"] = conn
+            command.downgrade(cfg, "0001")
+        conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+        conn.commit()
+    assert _head(engine) == "0001"
+    session_mod.upgrade_to_head()
+    assert _head(engine) == "0002"
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM plans")).scalar_one() == 1
+        # 外鍵檢查在 migration 之後恢復
+        assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1

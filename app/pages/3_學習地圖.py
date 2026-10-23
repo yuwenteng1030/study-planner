@@ -25,8 +25,12 @@ from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from core.game_map import Stage, bear_stage, build_map, build_stages, parse_map_action  # noqa: E402
 from core.map_art import render_svg, safe_url, zone_theme  # noqa: E402
 from db import repositories as repo  # noqa: E402
+from db.quota import DbLedger  # noqa: E402
 from db.session import session_scope  # noqa: E402
-from llm.client import encourage  # noqa: E402
+from llm.client import encourage, use_ledger  # noqa: E402
+
+# 額度存資料庫（重開伺服器不歸零）；llm.client 本身不碰資料庫，所以在這裡接上
+use_ledger(DbLedger())
 
 st.set_page_config(page_title="學習地圖", page_icon="🗺️", layout="centered")
 
@@ -259,6 +263,8 @@ def main() -> None:
         st.info("還沒有題庫。先執行 `python -m scripts.import_data` 匯入題庫。")
         return
     if replanned is not None:
+        # 重排一天只跑一次，今日任務頁之後拿到的是 None；把結果留給它顯示完整說明
+        st.session_state["pending_replan_report"] = replanned
         st.info("你有進度落後，已經把未完成的題目重排到今天之後。細節在「今日任務」頁。", icon="🔁")
 
     levels = build_map(topics, tasks, done_ids)

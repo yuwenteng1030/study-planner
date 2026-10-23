@@ -275,13 +275,17 @@ AI 自己決定的，越前面越值得看：
 拿掉沒用到的 fastapi/uvicorn/httpx、補釘 altair、刪空的佔位資料夾、lint 抓到的 1 個沒在斷言的測試變數補上斷言。
 **刻意沒做**：題庫查詢加 `st.cache_data`——125 題每次重跑只要幾毫秒，快取反而會讓 `import_data` 之後看到舊題庫。
 
-**還沒做（部署或多使用者前要做，依重要性）**：
-1. 時區：「今天」用伺服器時鐘（`date.today()`），時間戳有的存本地、有的存 UTC。部署到雲端（UTC）會讓台灣早上 8 點前看到昨天的任務。
-   做法：時間戳一律存 UTC、`users.tz` 欄位、`today_for(user)` 一處算「今天」。
-2. 正式 migration（Alembic）取代 `db/session.py` 的手寫 ALTER 清單。
-3. 打開「今日任務」頁就會重排並寫入資料庫：兩個分頁可能各寫一次；改成每人每天只重排一次。
-4. 「同時只有一份進行中計畫」只靠程式保證：加 partial unique index。
-5. API 額度存在記憶體、重開歸零、計畫說明的額度沒讀 `users.daily_api_quota`：改存資料庫。
+**第二批（同日完成）**：原本列為「部署或多使用者前要做」的五項全部做完：
+1. ~~時區~~：`core/clock.py` 是時間的唯一出處；「今天」照 `users.tz`（預設 Asia/Taipei），時間戳一律存 UTC，匯出標 `+00:00`（格式版本 3）。舊的 `plan_items.done_at`（本地時間）由 migration 換成 UTC。
+2. ~~正式 migration~~：Alembic（`db/migrations/`）。baseline `0001`＝導入當時的 schema；導入前的資料庫自動補欄位並標成 0001。測試會比對「migration 建出來的 schema」與 `db/models.py`，改了 model 忘了寫 migration 會紅。
+3. ~~每天只重排一次~~：`repo.ensure_replanned`，條件式 UPDATE 搶 `plans.last_replanned_on`；地圖頁也會先檢查。
+4. ~~唯一進行中計畫~~：partial unique index `uq_plans_one_active_per_user`；migration 先把多的 active 收起來。
+5. ~~額度存資料庫~~：`api_usage` 表＋`db/quota.py` 的 `DbLedger`；`llm/client.py` 不碰資料庫，由頁面注入。
+
+**審查後補強**：額度存放處出錯（例如資料庫被別的分頁鎖住）時退回預存文字、不讓頁面壞掉；退回額度改成一句 UPDATE（不會蓋掉別人的預留）；SQLite 跑 migration 時暫時關外鍵，downgrade 才能重建表；兩個行程同時初始化空資料庫時重試一次；地圖頁先觸發的重排，說明留給今日任務頁顯示。
+已知限制：`0002` 把舊的 `done_at` 從「這台機器的本地時間」換成 UTC，資料庫若先搬到別的時區的機器再升級，換算會錯（只影響導入前的舊紀錄）。
+
+**AI 決定、可以再議的**：計畫說明的額度仍是常數 150（`EXPLAIN_DAILY_QUOTA`），沒讀 `users.daily_api_quota`（那個值 50 是給鼓勵訊息的，一份計畫就要 60 題）；「同一題今天鼓勵過不再呼叫」仍在記憶體（體驗問題，不是成本防線）；匯出檔名的日期是 UTC。
 
 ## 環境待辦
 

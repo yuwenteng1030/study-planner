@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，274 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，294 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -181,13 +181,21 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
-python -m scripts.import_data      # 匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 274 個測試
+python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
+pytest -q                          # 294 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
 
 沒有 `ANTHROPIC_API_KEY` 也能完整執行，說明文字會使用預存版本。有 key 時，排出計畫會替每一題生成一句說明，任務卡會標出這句是「Claude 即時生成」還是「預存說明」。
+
+## 資料庫與時間
+
+- **schema 變更走 Alembic**（`db/migrations/versions/`）。網站第一次開交易時自動 `upgrade head`；改了 `db/models.py` 就要寫一支 migration，`tests/test_migrations.py` 會比對兩邊，對不上就紅。
+- **時間戳一律存 UTC，「今天」照使用者的時區**（`users.tz`，預設 Asia/Taipei），只在 `core/clock.py` 換算。不能用 `date.today()`：部署在 UTC 的伺服器上，台灣早上 8 點前會拿到昨天。
+- **重排每份計畫每天最多一次**，用條件式 UPDATE 搶 `plans.last_replanned_on`；兩個分頁同時打開也只有一個會寫入。
+- **同時只有一份進行中的計畫**由資料庫保證（partial unique index），不只靠程式。
+- **Claude 的每日額度存在 `api_usage` 表**，重開伺服器不會歸零。
 
 ## 測試
 
@@ -209,6 +217,10 @@ streamlit run app/Home.py
 | `tests/test_key_points.py` | 主題重點必須是字串：YAML 沒加引號的冒號會變成 dict、匯入時擋下、舊資料照樣顯示得出來 |
 | `tests/test_encouragement.py` | 鼓勵訊息：範本照情境挑（今天做完優先、0/0 不算做完）、Claude 只有乾淨回答才採用（拒答、截斷、例外都退回範本）、每日額度與同題不重複、逾時與不重試、輸出去掉連結、送出的模型與參數 |
 | `tests/test_explanations.py` | 計畫說明：沒 key 全是預存、單題失敗只退回那一題、來源標記寫進資料庫、輸出去掉連結、重用以前生成的說明不重複呼叫、每日額度、既有資料庫自動補欄位 |
+| `tests/test_migrations.py` | Alembic：從零建表與 models 一致、舊資料庫接軌（補欄位、多的進行中計畫收起來、完成時間換成 UTC）、資料庫擋下第二份進行中計畫 |
+| `tests/test_clock.py` | 時區：台灣早上 7 點已經是今天（UTC 還是昨天）、UTC 時間戳換成使用者的日期、壞掉的時區不會讓網站打不開 |
+| `tests/test_daily_replan.py` | 每天只重排一次：同一天第二次不寫入、隔天會再檢查、另一個分頁先搶到就不重排 |
+| `tests/test_quota_db.py` | 額度存資料庫：重開不歸零、退回沒用到的次數、不同用途分開算 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
 UI 冒煙測試不是裝飾：`pytest` 全綠、伺服器回 200、log 乾淨的情況下，打勾功能曾經是一個無窮迴圈——`st.rerun()` 用拋例外實作，而那個例外會讓外層的交易 rollback，於是每次重跑都再標記一次。只有真的去點那個 checkbox 才會發現。

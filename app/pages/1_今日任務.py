@@ -20,8 +20,12 @@ if str(_ROOT) not in sys.path:
 from api.deps import get_current_user  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from db import repositories as repo  # noqa: E402
+from db.quota import DbLedger  # noqa: E402
 from db.session import session_scope  # noqa: E402
-from llm.client import encourage  # noqa: E402
+from llm.client import encourage, use_ledger  # noqa: E402
+
+# 額度存資料庫（重開伺服器不歸零）；llm.client 本身不碰資料庫，所以在這裡接上
+use_ledger(DbLedger())
 
 st.set_page_config(page_title="今日任務", page_icon="✅", layout="centered")
 
@@ -99,6 +103,8 @@ def _render_page() -> None:
         # 落後就重排，每份計畫每天最多一次（見 repo.ensure_replanned）。
         # 沒落後時不動任何東西——每次開頁都重排會讓計畫看起來不穩定，使用者就不會信任它。
         result = repo.ensure_replanned(session, plan, today)
+        # 今天的重排可能是地圖頁先跑的：那邊把結果留在 session_state
+        result = result or st.session_state.pop("pending_replan_report", None)
         if result is not None:
             _report_replan(result)
 

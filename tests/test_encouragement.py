@@ -91,7 +91,6 @@ def fake_api(monkeypatch):
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setattr(anthropic, "Anthropic", _FakeAnthropic)
-    monkeypatch.setattr(client_mod, "_calls", {})
     monkeypatch.setattr(client_mod, "_cheered", set())
     _FakeAnthropic.calls = []
     _FakeAnthropic.reply = _reply("Arrays 的雙指標練熟了，下一題會更快。")

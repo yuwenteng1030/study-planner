@@ -20,6 +20,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
+from typing import Protocol
 
 from core.encouragement import Cheer, clean_generated
 
@@ -121,24 +122,75 @@ EXPLAIN_TIMEOUT_SECONDS = 10.0
 
 
 #: 每位使用者每天最多為幾題呼叫 Claude 寫說明。一份計畫約 60 題，所以 150 夠排兩份全新的，
-#: 重排同一批題目靠 ``reuse`` 不重複呼叫，不會吃到額度。存在記憶體，重開伺服器歸零。
+#: 重排同一批題目靠 ``reuse`` 不重複呼叫，不會吃到額度。
 EXPLAIN_DAILY_QUOTA = 150
-_explain_calls: dict[tuple[int, str], int] = {}
 
 
-def _reserve_explain_quota(user_id: int, wanted: int, quota: int) -> int:
-    """預留最多 ``wanted`` 次，回傳實際可用的次數（可能是 0）。"""
-    key = (user_id, _dt.date.today().isoformat())
-    with _quota_lock:
-        granted = max(0, min(wanted, quota - _explain_calls.get(key, 0)))
-        _explain_calls[key] = _explain_calls.get(key, 0) + granted
-        return granted
+class QuotaLedger(Protocol):
+    """每日額度記在哪裡。網站用 ``db.quota.DbLedger``（存資料庫），測試用 ``MemoryLedger``。
+
+    這個模組不碰資料庫（llm/ 只管跟 Claude 講話），所以額度的存放方式由呼叫端注入。
+    """
+
+    def reserve(self, user_id: int, kind: str, wanted: int, limit: int) -> int:
+        """預留最多 ``wanted`` 次，回傳實際拿到的次數（可能是 0）。"""
+
+    def refund(self, user_id: int, kind: str, count: int) -> None:
+        """退回沒用到的次數。"""
 
 
-def _refund_explain_quota(user_id: int, count: int) -> None:
-    key = (user_id, _dt.date.today().isoformat())
-    with _quota_lock:
-        _explain_calls[key] = max(0, _explain_calls.get(key, 0) - count)
+class MemoryLedger:
+    """存在記憶體的額度：重開歸零、多個行程各算各的。只給測試與沒有資料庫的情況用。"""
+
+    def __init__(self) -> None:
+        self._counts: dict[tuple[int, str, str], int] = {}
+        self._lock = threading.Lock()
+
+    def _key(self, user_id: int, kind: str) -> tuple[int, str, str]:
+        return (user_id, kind, _dt.date.today().isoformat())
+
+    def reserve(self, user_id: int, kind: str, wanted: int, limit: int) -> int:
+        key = self._key(user_id, kind)
+        with self._lock:
+            granted = max(0, min(wanted, limit - self._counts.get(key, 0)))
+            self._counts[key] = self._counts.get(key, 0) + granted
+            return granted
+
+    def refund(self, user_id: int, kind: str, count: int) -> None:
+        key = self._key(user_id, kind)
+        with self._lock:
+            self._counts[key] = max(0, self._counts.get(key, 0) - count)
+
+
+_ledger: QuotaLedger = MemoryLedger()
+
+
+def _reserve(user_id: int, kind: str, wanted: int, limit: int) -> int:
+    """預留額度；存放處出錯（例如資料庫被別的分頁鎖住）就當作沒有額度，退回預存文字。
+
+    這個模組的承諾是「Claude 那邊出什麼事都不會讓功能壞掉」，額度的存放處也算在內。
+    """
+    try:
+        return _ledger.reserve(user_id, kind, wanted, limit)
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("額度預留失敗，改用預存文字：%s", type(exc).__name__)
+        return 0
+
+
+def _refund(user_id: int, kind: str, count: int) -> None:
+    """退回額度；失敗只記一行，不影響已經生成好的內容（最壞是當天少用幾次）。"""
+    if count <= 0:
+        return
+    try:
+        _ledger.refund(user_id, kind, count)
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("額度退回失敗：%s", type(exc).__name__)
+
+
+def use_ledger(ledger: QuotaLedger) -> None:
+    """換掉額度的存放方式。網站的頁面在呼叫 Claude 之前設成 ``DbLedger``。"""
+    global _ledger
+    _ledger = ledger
 
 
 def explain_many(
@@ -165,7 +217,7 @@ def explain_many(
     todo = [t for t in tasks if t["id"] not in out]
     allowed = len(todo)
     if user_id is not None and is_available() and todo:
-        allowed = _reserve_explain_quota(user_id, len(todo), quota)
+        allowed = _reserve(user_id, "explain", len(todo), quota)
 
     def one(item: tuple[int, dict]) -> Explanation:
         index, task = item
@@ -190,7 +242,7 @@ def explain_many(
     if user_id is not None and allowed:
         # 失敗的呼叫（key 失效、429、逾時）不該吃掉當天額度：只收成功生成的
         succeeded = sum(1 for r in results[:allowed] if r.is_generated)
-        _refund_explain_quota(user_id, allowed - succeeded)
+        _refund(user_id, "explain", allowed - succeeded)
     return out
 
 
@@ -215,11 +267,9 @@ _ENCOURAGE_SYSTEM = """你是一位溫暖但不浮誇的程式面試教練。使
 或它的主題練到了什麼，可以呼應今天的進度；不要用「太棒了！」「你是最棒的」這種空話，\
 不要給解法，不要加表情符號以外的任何格式。只輸出那一句話。"""
 
-#: 每位使用者每天呼叫幾次的計數：``(user_id, 日期) → 次數``。
-#: 存在記憶體裡，重開伺服器會歸零——v0.1 沒有 ``api_usage`` 表（排在 v0.1.5），
-#: 這只是擋住「一直打勾取消再打勾」把額度燒光的最低防線。
-_calls: dict[tuple[int, str], int] = {}
 #: 今天已經用 Claude 鼓勵過的題目：``(user_id, 日期, 題名)``。同一題取消再打勾不再呼叫。
+#: 這個留在記憶體：它是「不要重複恭喜」的體驗問題，不是成本的防線——成本由
+#: ``_ledger``（資料庫）的每日額度擋，重開伺服器也不會歸零。
 _cheered: set[tuple[int, str, str]] = set()
 #: Streamlit 每個分頁一條執行緒，計數的讀改寫要上鎖。
 _quota_lock = threading.Lock()
@@ -231,14 +281,18 @@ _log = logging.getLogger(__name__)
 
 
 def _within_quota(user_id: int, quota: int, title: str) -> bool:
-    today = _dt.date.today().isoformat()
-    key = (user_id, today)
+    key = (user_id, _dt.datetime.now(_dt.timezone.utc).date().isoformat(), title)
+    # 先在鎖裡佔住「這一題今天鼓勵過」，資料庫的預留放到鎖外：
+    # 不要讓所有人的打勾都排隊等一筆資料庫寫入
     with _quota_lock:
-        if (user_id, today, title) in _cheered or _calls.get(key, 0) >= quota:
+        if key in _cheered:
             return False
-        _calls[key] = _calls.get(key, 0) + 1
-        _cheered.add((user_id, today, title))
-        return True
+        _cheered.add(key)
+    if _reserve(user_id, "encourage", 1, quota) < 1:
+        with _quota_lock:
+            _cheered.discard(key)
+        return False
+    return True
 
 
 def encourage(cheer: Cheer, fallback: str, *, user_id: int, quota: int) -> Explanation:

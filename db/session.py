@@ -64,32 +64,65 @@ def _alembic_config():  # noqa: ANN202
 
 
 def upgrade_to_head() -> None:
-    """跑完所有還沒跑的 migration。
+    """跑完所有還沒跑的 migration。兩個行程同時啟動、其中一個撞到對方剛建的表時，重試一次。"""
+    from sqlalchemy.exc import OperationalError
 
-    導入 Alembic（2026-10-23）以前建的資料庫沒有 ``alembic_version`` 表：
+    for attempt in range(2):
+        try:
+            _upgrade_once()
+            return
+        except OperationalError as exc:
+            # 另一個行程剛好在同時建表（already exists）或還抓著寫入鎖（locked）
+            transient = "already exists" in str(exc) or "locked" in str(exc)
+            if attempt == 1 or not transient:
+                raise
+            import time
+
+            time.sleep(0.5)
+
+
+def _upgrade_once() -> None:
+    """導入 Alembic（2026-10-23）以前建的資料庫沒有 ``alembic_version`` 表：
     補上當時唯一一個手動加過的欄位，標成 baseline，再往上升。
     用 ``create_all`` 建好的資料庫（測試）本來就是最新的樣子，直接標成最新版。
+
+    SQLite 跑 migration 時**暫時關掉外鍵檢查**：batch 模式改欄位的做法是「建新表、
+    搬資料、刪舊表」，外鍵開著的話刪舊表那一步會被擋下（例如 downgrade 拿掉 ``users.tz``）。
+    PRAGMA 在交易裡改不了，所以要在 ``begin()`` 之前下，結束後再打開。
     """
     from alembic import command
     from alembic.script import ScriptDirectory
     from sqlalchemy import inspect, text
 
     cfg = _alembic_config()
-    with _engine.begin() as conn:
-        cfg.attributes["connection"] = conn
-        inspector = inspect(conn)
-        tables = set(inspector.get_table_names())
-        if tables and "alembic_version" not in tables:
-            user_columns = {c["name"] for c in inspector.get_columns("users")} if "users" in tables else set()
-            if "tz" in user_columns:
-                command.stamp(cfg, ScriptDirectory.from_config(cfg).get_current_head())
-            else:
-                if "plan_items" in tables:
-                    item_columns = {c["name"] for c in inspector.get_columns("plan_items")}
-                    if "reason_source" not in item_columns:
-                        conn.execute(text("ALTER TABLE plan_items ADD COLUMN reason_source VARCHAR(10)"))
-                command.stamp(cfg, BASELINE_REVISION)
-        command.upgrade(cfg, "head")
+    is_sqlite = _engine.dialect.name == "sqlite"
+    with _engine.connect() as conn:
+        if is_sqlite:
+            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            conn.commit()  # exec 會自動開一個交易，先結束它，下面的 begin() 才開得起來
+        try:
+            with conn.begin():
+                cfg.attributes["connection"] = conn
+                inspector = inspect(conn)
+                tables = set(inspector.get_table_names())
+                if tables and "alembic_version" not in tables:
+                    user_columns = (
+                        {c["name"] for c in inspector.get_columns("users")} if "users" in tables else set()
+                    )
+                    if "tz" in user_columns:
+                        command.stamp(cfg, ScriptDirectory.from_config(cfg).get_current_head())
+                    else:
+                        if "plan_items" in tables:
+                            item_columns = {c["name"] for c in inspector.get_columns("plan_items")}
+                            if "reason_source" not in item_columns:
+                                conn.execute(text("ALTER TABLE plan_items ADD COLUMN reason_source VARCHAR(10)"))
+                        command.stamp(cfg, BASELINE_REVISION)
+                command.upgrade(cfg, "head")
+        finally:
+            if is_sqlite:
+                # 連線會回到連線池，下一個人拿到的必須是外鍵開著的
+                conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+                conn.commit()
 
 
 #: 這個行程是否已經升級過 schema。Streamlit 每個瀏覽器分頁一條執行緒，所以要上鎖：

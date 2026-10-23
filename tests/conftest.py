@@ -37,6 +37,19 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB}"
 os.environ.pop("ANTHROPIC_API_KEY", None)
 
 
+@pytest.fixture(autouse=True)
+def _fresh_api_ledger():
+    """每個測試一份新的記憶體額度。
+
+    UI 冒煙測試會跑頁面，頁面一 import 就把額度換成存資料庫的 ``DbLedger``；
+    不換回來的話，後面的單元測試會拿不存在的使用者去寫 ``api_usage``。
+    """
+    import llm.client as client_mod
+
+    client_mod.use_ledger(client_mod.MemoryLedger())
+    yield
+
+
 @pytest.fixture(scope="session")
 def seeded_app_db() -> Path:
     """建好資料表並灌入真實的 topics.yaml 與 tasks.csv。

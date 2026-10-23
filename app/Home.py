@@ -25,8 +25,12 @@ from core.goals import GOAL_PRESETS  # noqa: E402
 from core.planner import build_plan  # noqa: E402
 from core.scoring import JDStats, UserContext  # noqa: E402
 from db import repositories as repo  # noqa: E402
+from db.quota import DbLedger  # noqa: E402
 from db.session import session_scope  # noqa: E402
-from llm.client import explain_many  # noqa: E402
+from llm.client import explain_many, use_ledger  # noqa: E402
+
+# 額度存資料庫（重開伺服器不歸零）；llm.client 本身不碰資料庫，所以在這裡接上
+use_ledger(DbLedger())
 
 st.set_page_config(page_title="學習計畫", page_icon="🗺️", layout="centered")
 
