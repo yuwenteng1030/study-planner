@@ -195,20 +195,29 @@ def grass_pattern(pattern_id: str = "grass") -> str:
     )
 
 
-def scenery_piece(kind: int, x: float, y: float) -> str:
-    """空格裡放哪一種景物：田、小屋＋樹、池塘、樹林、麥田……輪流放。"""
+def scenery_piece(kind: int, x: float, y: float, side: int = 1) -> str:
+    """空格裡放哪一種景物：田、小屋＋樹、池塘、樹林、麥田……輪流放。
+
+    ``side``：田邊、樹林邊的動物放在右邊（1）或左邊（-1）；靠地圖右緣時放左邊，免得被切掉。
+    """
     k = kind % 6
     if k == 0:
-        return field(x, y, kind=0)
+        return field(x, y, kind=0) + npc("chicken", x + 36 * side, y + 14, delay=kind * 0.7)
     if k == 1:
-        return house(x - 8, y + 8, variant=kind) + tree(x + 22, y + 10, 0.8)
+        return house(x - 8, y + 8, variant=kind) + tree(x + 22, y + 10, 0.8) + npc("cat", x - 30, y + 14)
     if k == 2:
-        return pond(x, y + 2) + flowers(x + 30, y - 10, seed=kind)
+        return pond(x, y + 2) + npc("duck", x - 2, y + 4, delay=kind * 0.5) + flowers(x + 30, y - 10, seed=kind)
     if k == 3:
-        return tree(x - 16, y + 8) + tree(x + 12, y + 12, 0.85) + bush(x + 2, y - 10)
+        return (
+            tree(x - 16, y + 8) + tree(x + 12, y + 12, 0.85) + bush(x + 2, y - 10)
+            + npc("rabbit", x + 30 * side, y + 14, delay=kind * 0.3)
+        )
     if k == 4:
-        return field(x, y, kind=1)
-    return house(x, y + 8, variant=kind) + flowers(x - 26, y + 4, seed=kind) + bush(x + 24, y + 6)
+        return field(x, y, kind=1) + npc("sheep", x + 36 * side, y + 14)
+    return (
+        house(x, y + 8, variant=kind) + flowers(x - 26, y + 4, seed=kind) + bush(x + 24, y + 6)
+        + npc("dog", x - 26, y + 16, delay=kind * 0.4)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -445,3 +454,160 @@ def landmark(kind: str, x: float, y: float, *, boss: bool = False, variant: int 
 LANDMARK_SCALE = 1.3
 #: 最高的地標（城堡含旗子）從底部往上的高度，放大前
 LANDMARK_MAX_HEIGHT = 37
+
+
+# ---------------------------------------------------------------------------
+# 可愛動物 NPC：原創的簡單向量圖，臉朝右，光從左上來
+# ---------------------------------------------------------------------------
+
+INK_DARK = "#3B2A1E"
+
+
+def _eye(x: float, y: float) -> str:
+    return f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.3" fill="{INK_DARK}"/><circle cx="{x + 0.4:.1f}" cy="{y - 0.5:.1f}" r="0.45" fill="#FFF"/>'
+
+
+def _blush(x: float, y: float) -> str:
+    return f'<ellipse cx="{x:.1f}" cy="{y:.1f}" rx="1.8" ry="1.1" fill="#F4A3A3" opacity="0.85"/>'
+
+
+def _chicken(x: float, y: float) -> str:
+    return (
+        f'<line x1="{x - 2}" y1="{y - 3}" x2="{x - 2}" y2="{y}" stroke="#E8862E" stroke-width="1.3"/>'
+        f'<line x1="{x + 2}" y1="{y - 3}" x2="{x + 2}" y2="{y}" stroke="#E8862E" stroke-width="1.3"/>'
+        f'<ellipse cx="{x}" cy="{y - 8}" rx="7" ry="6" fill="#FFFFFF"/>'
+        f'<ellipse cx="{x - 3}" cy="{y - 7}" rx="3" ry="2.4" fill="#EDE6DA"/>'
+        f'<circle cx="{x + 4}" cy="{y - 13}" r="4" fill="#FFFFFF"/>'
+        f'<path d="M{x + 2},{y - 17} q1,-2.5 2,0 q1,-2.5 2,0" fill="#E0453A"/>'
+        f'<polygon points="{x + 7.5},{y - 13} {x + 10},{y - 12} {x + 7.5},{y - 11}" fill="#F2A23A"/>'
+        + _eye(x + 5, y - 14) + _blush(x + 5, y - 11.5)
+    )
+
+
+def _sheep(x: float, y: float) -> str:
+    wool = "".join(
+        f'<circle cx="{x + dx}" cy="{y - 9 + dy}" r="4" fill="#FFFFFF"/>'
+        for dx, dy in ((-6, 0), (-2, -3), (3, -3), (6, 0), (2, 2), (-3, 2))
+    )
+    return (
+        f'<rect x="{x - 6}" y="{y - 5}" width="2.2" height="5" fill="{INK_DARK}"/>'
+        f'<rect x="{x + 3}" y="{y - 5}" width="2.2" height="5" fill="{INK_DARK}"/>'
+        + wool
+        + f'<ellipse cx="{x + 9}" cy="{y - 11}" rx="3.6" ry="4.2" fill="#4A3B32"/>'
+        f'<ellipse cx="{x + 6.5}" cy="{y - 13}" rx="2" ry="1.2" fill="#4A3B32"/>'
+        + f'<circle cx="{x + 10}" cy="{y - 12}" r="0.9" fill="#FFF"/>'
+    )
+
+
+def _cow(x: float, y: float) -> str:
+    return (
+        "".join(f'<rect x="{x + dx}" y="{y - 5}" width="2.4" height="5" fill="#E9E2D6"/>' for dx in (-8, -3, 2, 6))
+        + f'<rect x="{x - 10}" y="{y - 14}" width="19" height="10" rx="5" fill="#FFFFFF"/>'
+        f'<ellipse cx="{x - 4}" cy="{y - 10}" rx="3.5" ry="2.6" fill="{INK_DARK}"/>'
+        f'<ellipse cx="{x + 3}" cy="{y - 12}" rx="2.4" ry="1.8" fill="{INK_DARK}"/>'
+        f'<rect x="{x + 7}" y="{y - 19}" width="9" height="9" rx="4" fill="#FFFFFF"/>'
+        f'<ellipse cx="{x + 13}" cy="{y - 12}" rx="3.6" ry="2.4" fill="#F4B7B0"/>'
+        f'<path d="M{x + 8},{y - 19} l-2,-2 M{x + 15},{y - 19} l2,-2" stroke="#D8B66A" stroke-width="1.6" stroke-linecap="round"/>'
+        + _eye(x + 11, y - 16)
+    )
+
+
+def _pig(x: float, y: float) -> str:
+    return (
+        "".join(f'<rect x="{x + dx}" y="{y - 4}" width="2.4" height="4" fill="#E58B98"/>' for dx in (-6, -2, 2, 5))
+        + f'<ellipse cx="{x}" cy="{y - 8}" rx="9" ry="6" fill="#F6A9B4"/>'
+        f'<ellipse cx="{x - 3}" cy="{y - 10}" rx="4" ry="2" fill="#FBC9D0"/>'
+        f'<path d="M{x - 9},{y - 9} q-3,-1 -2,-3 q2,0 1,2" fill="none" stroke="#E58B98" stroke-width="1.2"/>'
+        f'<polygon points="{x + 4},{y - 13} {x + 6},{y - 17} {x + 8},{y - 13}" fill="#E58B98"/>'
+        f'<ellipse cx="{x + 9.5}" cy="{y - 8}" rx="2.8" ry="2.2" fill="#E58B98"/>'
+        f'<circle cx="{x + 8.8}" cy="{y - 8}" r="0.6" fill="{INK_DARK}"/><circle cx="{x + 10.2}" cy="{y - 8}" r="0.6" fill="{INK_DARK}"/>'
+        + _eye(x + 6, y - 11)
+    )
+
+
+def _cat(x: float, y: float) -> str:
+    fur, light = "#F0A04B", "#F8C98A"
+    return (
+        f'<path d="M{x - 7},{y - 5} q-6,-2 -4,-10" fill="none" stroke="{fur}" stroke-width="2.4" stroke-linecap="round"/>'
+        f'<ellipse cx="{x - 1}" cy="{y - 5}" rx="6.5" ry="5" fill="{fur}"/>'
+        f'<ellipse cx="{x}" cy="{y - 4}" rx="3" ry="2.6" fill="{light}"/>'
+        f'<circle cx="{x + 4}" cy="{y - 12}" r="5" fill="{fur}"/>'
+        f'<polygon points="{x + 0.5},{y - 15} {x + 1},{y - 20} {x + 4},{y - 16}" fill="{fur}"/>'
+        f'<polygon points="{x + 5},{y - 16} {x + 8},{y - 20} {x + 8.5},{y - 14.5}" fill="{fur}"/>'
+        + _eye(x + 3, y - 12.5) + _eye(x + 6.5, y - 12.5) + _blush(x + 7.5, y - 10.5)
+    )
+
+
+def _duck(x: float, y: float) -> str:
+    return (
+        f'<ellipse cx="{x}" cy="{y - 5}" rx="7.5" ry="4.5" fill="#FFD84E"/>'
+        f'<ellipse cx="{x - 2.5}" cy="{y - 5.5}" rx="3.2" ry="2" fill="#F2C335"/>'
+        f'<circle cx="{x + 5}" cy="{y - 11}" r="3.8" fill="#FFD84E"/>'
+        f'<ellipse cx="{x + 9.3}" cy="{y - 10.4}" rx="2.6" ry="1.3" fill="#F28C2E"/>'
+        + _eye(x + 5.8, y - 12) + _blush(x + 5.5, y - 9.5)
+    )
+
+
+def _rabbit(x: float, y: float) -> str:
+    fur = "#F3EEE8"
+    return (
+        f'<ellipse cx="{x}" cy="{y - 5}" rx="6.5" ry="5" fill="{fur}"/>'
+        f'<circle cx="{x - 6}" cy="{y - 6}" r="2.2" fill="#FFFFFF"/>'
+        f'<circle cx="{x + 4.5}" cy="{y - 11}" r="4.6" fill="{fur}"/>'
+        f'<ellipse cx="{x + 3}" cy="{y - 19}" rx="1.7" ry="5" fill="{fur}"/>'
+        f'<ellipse cx="{x + 6.5}" cy="{y - 19}" rx="1.7" ry="5" fill="{fur}"/>'
+        f'<ellipse cx="{x + 3}" cy="{y - 19}" rx="0.7" ry="3.5" fill="#F4B7B0"/>'
+        f'<ellipse cx="{x + 6.5}" cy="{y - 19}" rx="0.7" ry="3.5" fill="#F4B7B0"/>'
+        + _eye(x + 6, y - 12) + _blush(x + 7, y - 9.5)
+    )
+
+
+def _dog(x: float, y: float) -> str:
+    fur, dark = "#C98B52", "#8A5A33"
+    return (
+        f'<path d="M{x - 7},{y - 8} q-4,-4 -2,-7" fill="none" stroke="{fur}" stroke-width="2.2" stroke-linecap="round"/>'
+        + "".join(f'<rect x="{x + dx}" y="{y - 4}" width="2.4" height="4" fill="{dark}"/>' for dx in (-5, 3))
+        + f'<ellipse cx="{x - 1}" cy="{y - 7}" rx="7" ry="4.5" fill="{fur}"/>'
+        f'<circle cx="{x + 5}" cy="{y - 12}" r="4.6" fill="{fur}"/>'
+        f'<ellipse cx="{x + 2.4}" cy="{y - 12}" rx="1.8" ry="3.4" fill="{dark}"/>'
+        f'<ellipse cx="{x + 9}" cy="{y - 11}" rx="2" ry="1.6" fill="#E9C9A6"/>'
+        f'<circle cx="{x + 10}" cy="{y - 11.4}" r="0.9" fill="{INK_DARK}"/>'
+        + _eye(x + 6, y - 13.5)
+    )
+
+
+#: 動物 → （畫法, 滑鼠移上去的一句話, 會不會跳）
+NPCS: dict[str, tuple] = {
+    "chicken": (_chicken, "小雞：咕咕！先把題目讀完再動手喔", True),
+    "sheep": (_sheep, "綿羊：咩～卡住了就先寫暴力解", False),
+    "cow": (_cow, "乳牛：哞～邊界條件檢查了嗎？", False),
+    "pig": (_pig, "小豬：做完一題，休息一下下", False),
+    "cat": (_cat, "貓咪：喵，Medium 才是考試的主角", False),
+    "duck": (_duck, "鴨鴨：呱！今天也來一題吧", True),
+    "rabbit": (_rabbit, "兔兔：一步一步跳過去就好", True),
+    "dog": (_dog, "狗狗：汪！你做得很好", True),
+}
+NPC_ORDER = ("chicken", "sheep", "rabbit", "cow", "cat", "duck", "pig", "dog")
+
+
+def npc(kind: str, x: float, y: float, delay: float = 0.0) -> str:
+    """一隻動物，``(x, y)`` 是腳底中心。會跳的動物加上 ``npc-hop``（尊重「減少動態」）。
+    滑鼠移上去會出現一句話（SVG 的 ``<title>``），所以動物本身可以被指到，但不會擋到關卡——
+    牠們只放在離關卡和小路都夠遠的空地上。"""
+    draw, line, hops = NPCS[kind]
+    cls = "npc npc-hop" if hops else "npc"
+    # 每隻跳的時間錯開，不會整片同步跳
+    style = f' style="animation-delay:-{delay:.1f}s"' if hops else ""
+    return (
+        f'<g class="{cls}" data-npc="{kind}" data-x="{x:.1f}" data-y="{y:.1f}"{style}>'
+        f"<title>{line}</title>"
+        + shadow(x + 2, y + 1, 10, 3, 0.22)
+        # 以腳底為中心放大：地圖縮在畫面上時原尺寸太小
+        + f'<g transform="translate({x:.1f},{y:.1f}) scale({NPC_SCALE}) translate({-x:.1f},{-y:.1f})">'
+        + draw(x, y)
+        + "</g></g>"
+    )
+
+
+#: 動物放大倍率（以腳底為中心）
+NPC_SCALE = 1.35

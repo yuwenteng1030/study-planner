@@ -529,10 +529,14 @@ def render_svg(
         ".stage .platform{transition:transform .15s ease-out}"
         ".stage:hover .platform,.stage:focus .platform{transform:translateY(-4px)}"
         "@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}"
+        # 動物：大部分時間站著，偶爾跳一下
+        "@keyframes hop{0%,72%,100%{transform:translateY(0)}80%{transform:translateY(-5px)}88%{transform:translateY(0)}}"
+        ".npc-hop{animation:hop 2.4s ease-in-out infinite}"
+        ".npc{cursor:help}"
         "@keyframes breathe{0%,100%{opacity:.95}50%{opacity:.35}}"
         ".bear-bob{animation:bob 1.6s ease-in-out infinite}"
         ".halo{animation:breathe 1.8s ease-in-out infinite}"
-        "@media (prefers-reduced-motion: reduce){.bear-bob,.halo,.adventure-flag{animation:none}"
+        "@media (prefers-reduced-motion: reduce){.bear-bob,.halo,.adventure-flag,.npc-hop{animation:none}"
         ".stage .platform{transition:none}}"
         "</style>",
     ]
@@ -586,11 +590,12 @@ def render_svg(
         # 木牌旁邊放一小組景物（朝地圖中間）：區名本來就放在小路離開這一區的另一側
         # （_label_x），放在另一側會壓到往上走的那段路
         decor_x = pill_x + pill + 45 if pill_x < WIDTH / 2 else pill_x - 45
+        greeter = ("rabbit", "sheep", "cow", "pig")[b.zone % 4]
         out.append(
             f'<g class="decor" data-x="{decor_x:.1f}">'
-            + farm_art.tree(decor_x - 14, b.top + 34, 0.75)
-            + farm_art.bush(decor_x + 8, b.top + 32)
-            + farm_art.flowers(decor_x + 22, b.top + 26, seed=b.zone)
+            + farm_art.tree(decor_x - 16, b.top + 34, 0.75)
+            + farm_art.npc(greeter, decor_x + 6, b.top + 36, delay=b.zone * 0.8)
+            + farm_art.flowers(decor_x + 26, b.top + 28, seed=b.zone)
             + "</g>"
         )
 
@@ -627,16 +632,21 @@ def render_svg(
     # 空格裡的景物：有影子的樹、石頭、花，讓盤面不空
     columns_used = FOCUS_COLUMNS if not by_topic else COLUMNS
     for i, (sx, sy, zone) in enumerate(scenery_spots(placed, columns_used)):
-        out.append(farm_art.scenery_piece(i + zone, sx, sy))
+        out.append(farm_art.scenery_piece(i + zone, sx, sy, side=-1 if sx > WIDTH - 90 else 1))
     # 兩排之間的草地：小樹叢、花、小樹輪流放
     here_spot = next((p for p in placed if p.stage.task_id == here_id), None)
     for i, (fx, fy) in enumerate(filler_spots(placed, bands, columns_used, here_spot)):
         kind = i % 3
-        out.append(
-            farm_art.bush(fx, fy + 4) if kind == 0
-            else farm_art.flowers(fx, fy, seed=i) if kind == 1
-            else farm_art.tree(fx, fy + 6, 0.6)
-        )
+        if kind == 1:
+            # 每三格有一格是動物，種類輪流換
+            animal = farm_art.NPC_ORDER[(i // 3) % len(farm_art.NPC_ORDER)]
+            out.append(farm_art.npc(animal, fx, fy + 8, delay=(i * 0.37) % 2.4))
+        else:
+            out.append(
+                farm_art.bush(fx, fy + 4) if (i // 3) % 2 == 0 and kind == 0
+                else farm_art.flowers(fx, fy, seed=i) if kind == 2
+                else farm_art.tree(fx, fy + 6, 0.6)
+            )
 
     if placed:
         # 終點的獎盃放在最後一關旁邊。小熊站在關卡左邊（x - BEAR_OFFSET），

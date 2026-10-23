@@ -402,3 +402,21 @@ def test_levels_of_the_same_topic_look_slightly_different() -> None:
     roofs = {re.search(r'points="([^"]+)" fill="#7A3B2C"', farm_art.landmark("barn", 0, 0, variant=v)).group(1)
              for v in range(6)}
     assert len(roofs) == 1
+
+
+def test_npcs_live_on_the_grass_not_on_the_road_or_islands(topics, tasks) -> None:
+    """可愛動物到處都有，但不能站在小路上或擋住關卡。"""
+    from core.map_art import road_samples
+
+    for by_topic in (True, False):
+        stages = _real(topics, tasks)
+        placed, *_ = layout(stages, by_topic=by_topic)
+        root = _parse(render_svg(stages, _urls(stages), None, by_topic=by_topic))
+        npcs = [(float(g.get("data-x")), float(g.get("data-y")), g.get("data-npc"))
+                for g in root.iter() if g.get("data-npc")]
+        assert len(npcs) >= 10 and len({k for *_, k in npcs}) >= 5
+        road = road_samples([(p.x, p.y) for p in placed])
+        for x, y, kind in npcs:
+            assert 12 <= x <= WIDTH - 12, (kind, x)  # 不能被地圖邊緣切掉
+            assert min(((x - a) ** 2 + (y - 8 - b) ** 2) ** 0.5 for a, b in road) >= 16, (kind, x, y)
+            assert all(((x - p.x) ** 2 + (y - 8 - p.y) ** 2) ** 0.5 >= 30 for p in placed), (kind, x, y)

@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，321 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，322 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -28,7 +28,7 @@
 | Medium 主力 | 14 | 陣列（New Year Chaos、Sparse Arrays）、字串與雜湊（Sherlock 系列、Count Triplets、Frequency Queries）、排序與二分（Minimum Swaps 2、Fraudulent Activity、Pairs、Minimum Time Required）、Greedy、Stack |
 | 進階 | 10 | 圖（Roads and Libraries、Journey to the Moon、BFS）、DP（Max Array Sum、Coin Change、Candies、Common Child）、單調堆疊，加上 3 題 Hard（拿部分分數用） |
 
-合計 Medium 21 題、Hard 3 題、約 1035 分鐘。首頁預設「只排重點題組」，學習地圖預設「只看重點路線」；做完再關掉開關，排其餘的題目。
+合計 Medium 21 題、Hard 3 題、約 1035 分鐘。首頁預設「只排重點題組」，學習地圖預設顯示「重點路線」（上方可切到「整個題庫」）；做完再關掉首頁的開關，排其餘的題目。
 挑選是 `data/tasks.csv` 的 `focus` 欄（1／2／3），不動評分公式：重點題組只是縮小排程的輸入。
 
 ## 評分公式
@@ -195,7 +195,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 321 個測試
+pytest -q                          # 322 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```

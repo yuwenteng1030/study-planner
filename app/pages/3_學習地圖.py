@@ -48,6 +48,7 @@ MAP_KEY = "level_map"
 FOCUS_KEY = "map_focus"  # 小卡開在哪一關（task_id）；"next" 表示破關後跳到下一關
 CLEARED_KEY = "map_cleared"  # 剛破關的題名，給小卡說一聲「過關」
 ERROR_KEY = "map_error"
+VIEW_KEY = "map_view"  # 地圖顯示哪個版本："focus" 重點路線／"all" 整個題庫
 CHEER_KEY = "map_cheer"  # 破關的鼓勵訊息，下一輪用 toast 顯示一次
 CLEARED_MINUTES_KEY = "map_cleared_minutes"  # 剛破關那一題計時算出來的分鐘數
 
@@ -365,13 +366,28 @@ def main() -> None:
         and int(linked_early) not in focus_stages
         and any(s.task_id == int(linked_early) for s in all_stages)
     ):
-        st.session_state["map_focus_only"] = False
-    focus_only = bool(focus_stages) and st.toggle(
-        f"只看重點路線（{len(focus_stages)} 關）",
-        value=True,
-        key="map_focus_only",
-        help="依上機考型態挑的重點題組，分暖身 → Medium 主力 → 進階三段。關掉就顯示整個題庫。",
-    )
+        st.session_state[VIEW_KEY] = "all"
+    # 兩個版本做成兩個看得見的選項（原本是一個開關：關掉後地圖會自動捲到最下面，
+    # 兩個版本的底部都是一排帳篷，看起來像沒變）
+    focus_only = False
+    if focus_stages:
+        view = st.radio(
+            "地圖",
+            options=["focus", "all"],
+            format_func=lambda v: (
+                f"⭐ 重點路線（{len(focus_stages)} 關）" if v == "focus" else f"🗺️ 整個題庫（{len(all_stages)} 關）"
+            ),
+            horizontal=True,
+            key=VIEW_KEY,
+            label_visibility="collapsed",
+            help="重點路線：依上機考型態挑的題組，分暖身 → Medium 主力 → 進階三段。",
+        )
+        focus_only = view == "focus"
+        st.caption(
+            f"目前顯示：**{'重點路線' if focus_only else '整個題庫'}**，"
+            f"共 {len(focus_stages) if focus_only else len(all_stages)} 關"
+            + ("（三段、盤面傾斜）" if focus_only else "（依主題分排，左邊是主題名）")
+        )
     stages = focus_route(all_stages, focus_stages) if focus_only else all_stages
     if not stages:
         st.info("題庫裡的題目都對不上知識地圖的主題，畫不出關卡。重新匯入題庫試試。")
@@ -415,7 +431,7 @@ def main() -> None:
         hidden = sum(1 for t in marks.today if t not in by_id)
         st.caption(
             f"🔵 藍圈＝今天的任務（還剩 {today_left} / {len(marks.today)} 題）"
-            + (f"，其中 {hidden} 題不在重點路線上（關掉上面的開關就看得到）" if hidden else "")
+            + (f"，其中 {hidden} 題不在重點路線上（切到上面的「整個題庫」就看得到）" if hidden else "")
             + (f"　🔴 紅圈＝過期還沒做（{len(marks.overdue)} 題，到「今日任務」按重排）" if marks.overdue else "")
         )
 

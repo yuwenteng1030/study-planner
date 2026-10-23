@@ -136,7 +136,7 @@ def _map_done(app) -> int:
 def _full_map():
     """打開學習地圖並關掉「只看重點路線」，看整個題庫。"""
     app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT)
-    app.session_state["map_focus_only"] = False
+    app.session_state["map_view"] = "all"
     return app.run()
 
 
