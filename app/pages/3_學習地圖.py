@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import datetime as _dt
 import re
 import sys
 from pathlib import Path
@@ -197,7 +196,7 @@ def _cheer_inputs(session, user_id: int, task_id: int, title: str, where: str) -
         session.flush()
         plan = repo.load_active_plan(session, user_id)
         if plan is not None:
-            summary = repo.progress_summary(plan, _dt.date.today())
+            summary = repo.progress_summary(plan, repo.user_today(session, user_id))
             today_done, today_total = summary["today_done"], summary["today_total"]
     cheer = Cheer(
         title=title, topic_name=topic_name, difficulty=difficulty, est_minutes=est,
@@ -250,7 +249,10 @@ def main() -> None:
         tasks = repo.load_task_inputs(session)
         urls = repo.load_task_urls(session)
         done_ids = repo.load_map_done_task_ids(session, get_current_user())
-        marks = repo.plan_marks(repo.load_active_plan(session, get_current_user()), _dt.date.today())
+        marks = repo.plan_marks(
+            repo.load_active_plan(session, get_current_user()),
+            repo.user_today(session, get_current_user()),
+        )
 
     if not tasks:
         st.info("還沒有題庫。先執行 `python -m scripts.import_data` 匯入題庫。")

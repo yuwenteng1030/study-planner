@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from core import clock
+
 import datetime as _dt
 import json
 
@@ -71,7 +73,7 @@ def populated(db_session):
         )
         session.flush()
 
-    today = _dt.date.today()
+    today = clock.today_in(None)
     # 第一份排完之後再排第二份，第一份會被 create_plan 收成 archived。
     _make_plan(session, USER_ID, start=today - _dt.timedelta(days=10))
     active = _make_plan(session, USER_ID, start=today)
@@ -159,7 +161,7 @@ def test_export_does_not_leak_other_users_data(populated) -> None:
         User(id=OTHER_USER_ID, email="other@example.com", display_name="別人")
     )
     session.flush()
-    other_plan = _make_plan(session, OTHER_USER_ID, start=_dt.date.today())
+    other_plan = _make_plan(session, OTHER_USER_ID, start=clock.today_in(None))
     session.flush()
 
     export = repo.export_user_data(session, USER_ID)
@@ -243,7 +245,7 @@ def test_delete_does_not_touch_other_users(populated) -> None:
         User(id=OTHER_USER_ID, email="other2@example.com", display_name="別人")
     )
     session.flush()
-    _make_plan(session, OTHER_USER_ID, start=_dt.date.today())
+    _make_plan(session, OTHER_USER_ID, start=clock.today_in(None))
     session.flush()
 
     repo.delete_user_data(session, USER_ID, drop_account=True)
@@ -316,7 +318,7 @@ def test_can_plan_again_after_dropping_the_account(populated) -> None:
     session.flush()
 
     repo.ensure_user(session, USER_ID)
-    plan = _make_plan(session, USER_ID, start=_dt.date.today())
+    plan = _make_plan(session, USER_ID, start=clock.today_in(None))
     session.flush()
 
     assert plan.items, "重建帳號後排不出計畫"

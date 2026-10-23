@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-import datetime as _dt
+from core import clock
+
 
 import pytest
 
@@ -123,7 +124,7 @@ def test_equal_weight_levels_fall_back_to_id_order() -> None:
 
 
 def _plan(session, user_id: int):
-    today = _dt.date.today()
+    today = clock.today_in(None)
     core_plan = build_plan(
         topics=repo.load_topic_nodes(session),
         tasks=repo.load_task_inputs(session),

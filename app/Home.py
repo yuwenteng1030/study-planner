@@ -9,7 +9,6 @@ v0.1 的目標是「十天內做出能用的東西」，而排程邏輯已經全
 
 from __future__ import annotations
 
-import datetime as _dt
 import sys
 from pathlib import Path
 
@@ -47,6 +46,7 @@ def main() -> None:
         tasks = repo.load_task_inputs(session)
         done_ids = repo.load_completed_task_ids_for_user(session, get_current_user())
         topic_names = {t.id: t.name for t in topics}
+        today = repo.user_today(session, get_current_user())
 
     if not tasks:
         st.error(
@@ -86,7 +86,7 @@ def main() -> None:
                 value=DEFAULT_HOURS,
                 step=0.25,
             )
-        start_date = st.date_input("從哪一天開始", value=_dt.date.today())
+        start_date = st.date_input("從哪一天開始", value=today)
 
         st.subheader("3. 你目前的程度")
         st.caption(
@@ -245,7 +245,7 @@ def _show_existing_plan_hint() -> None:
         plan = repo.load_active_plan(session, get_current_user())
         if plan is None:
             return
-        summary = repo.progress_summary(plan, _dt.date.today())
+        summary = repo.progress_summary(plan, repo.user_today(session, plan.user_id))
         st.info(
             f"你已經有一份進行中的計畫（{plan.start_date:%m/%d} 起、"
             f"{plan.days} 天），完成 {summary['overall_done']}/"

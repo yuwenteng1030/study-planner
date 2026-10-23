@@ -15,6 +15,7 @@ import datetime as _dt
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
+from core import clock
 from core.calibration import Sample
 from core.game_map import PlanMarks
 from core.planner import Plan as CorePlan
@@ -332,7 +333,7 @@ def mark_item_done(
     這段資料事後補不回來。
     """
     item.status = "done"
-    item.done_at = _dt.datetime.now()
+    item.done_at = clock.utc_now()
     if actual_minutes is not None:
         item.actual_minutes = actual_minutes
     _record(session, item.plan, "done", item_id=item.id,
@@ -420,7 +421,7 @@ def apply_replan(
     # 回顧頁就不知道它原本排在哪一週，也不知道「這一題被拖過」。
     # ``overdue`` 區分兩種挪動：原本的日子已經過了（自己落後）與只是被前面的題
     # 擠到後面——重排會把所有待做的題重新裝填，一題過期，後面每一題都會跟著挪。
-    today = today or _dt.date.today()
+    today = today or clock.today_in(plan.user.tz if plan.user else None)
     moved = []
     for new_item in result.items:
         row = by_task.get(new_item.task_id)
@@ -530,13 +531,15 @@ def progress_summary(plan: Plan, today: _dt.date) -> dict:
     }
 
 
-def _local_date(stamp: _dt.datetime) -> _dt.date:
-    """``server_default=func.now()`` 的時間：SQLite 存的是 UTC，換成本機日期。
+def user_tz(session: Session, user_id: int) -> str:
+    """使用者的時區；沒有這個使用者時用預設值。"""
+    user = session.get(User, user_id)
+    return user.tz if user is not None and user.tz else clock.DEFAULT_TZ
 
-    排定日期、完成時間（``datetime.now()``）都是本機時間；不換的話，台灣早上
-    八點前排的新計畫，舊計畫會被當成前一天就收起來。
-    """
-    return stamp.replace(tzinfo=_dt.timezone.utc).astimezone().date()
+
+def user_today(session: Session, user_id: int) -> _dt.date:
+    """使用者時區的「今天」。各頁一律從這裡拿，不要用 ``date.today()``（那是伺服器的時鐘）。"""
+    return clock.today_in(user_tz(session, user_id))
 
 
 def load_review_data(
@@ -557,6 +560,7 @@ def load_review_data(
 
     「過期後被挪」以題目為單位：同一題在任何一份計畫裡過期被挪過，就算挪過。
     """
+    tz = user_tz(session, user_id)
     plans = session.execute(
         select(Plan.id, Plan.status, Plan.created_at)
         .where(Plan.user_id == user_id)
@@ -565,7 +569,7 @@ def load_review_data(
     archived_on: dict[int, _dt.date] = {}
     for (plan_id, status, _), nxt in zip(plans, plans[1:]):
         if status != "active":
-            archived_on[plan_id] = _local_date(nxt.created_at)
+            archived_on[plan_id] = clock.to_local_date(nxt.created_at, tz)
     active_ids = {plan_id for plan_id, status, _ in plans if status == "active"}
 
     # (plan_id, task_id) → 最早的原始日期；過期後才被挪的題目
@@ -587,7 +591,7 @@ def load_review_data(
             key = (plan_id, entry["task_id"])
             if key not in original or start < original[key]:
                 original[key] = start
-            if entry.get("overdue", start < _local_date(created_at)):
+            if entry.get("overdue", start < clock.to_local_date(created_at, tz)):
                 moved_overdue.add(entry["task_id"])
 
     rows = session.execute(
@@ -611,7 +615,7 @@ def load_review_data(
                 topic_id=topic_id,
                 scheduled_date=first,
                 status=status,
-                done_on=done_at.date() if done_at else None,
+                done_on=clock.to_local_date(done_at, tz) if done_at else None,
                 current_date=current,
                 active=plan_id in active_ids,
             )
@@ -655,7 +659,8 @@ def load_calibration_samples(session: Session, user_id: int) -> list[Sample]:
 
 #: 匯出檔的格式版本。之後欄位有增減時靠這個數字判斷怎麼讀。
 #: 2：加上 ``task_completions``（從地圖做完、不在計畫裡的題目）。
-EXPORT_FORMAT_VERSION = 2
+#: 3：時間戳一律是 UTC 並標上 ``+00:00``；``user.tz`` 是使用者的時區（2026-10-23）。
+EXPORT_FORMAT_VERSION = 3
 
 #: 帳號被刪掉後重建時用的預設值。與 ``scripts/import_data.py`` 的 SEED_USER 一致。
 _FALLBACK_EMAIL = "owner@localhost"
@@ -730,12 +735,13 @@ def export_user_data(session: Session, user_id: int) -> dict:
 
     return {
         "format_version": EXPORT_FORMAT_VERSION,
-        "exported_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "exported_at": clock.iso_utc(clock.utc_now()),
         "user": {
             "id": user.id,
             "email": user.email,
             "display_name": user.display_name,
             "daily_api_quota": user.daily_api_quota,
+            "tz": user.tz,
             "created_at": _iso(user.created_at),
         },
         "plans": [
@@ -798,7 +804,9 @@ def export_user_data(session: Session, user_id: int) -> dict:
 
 
 def _iso(value: _dt.date | _dt.datetime | None) -> str | None:
-    """日期轉 ISO 字串；``None`` 原樣保留。"""
+    """日期轉 ISO 字串；時間戳標上 UTC。``None`` 原樣保留。"""
+    if isinstance(value, _dt.datetime):
+        return clock.iso_utc(value)
     return None if value is None else value.isoformat()
 
 

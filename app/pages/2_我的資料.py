@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import datetime as _dt
 import json
 import sys
 from pathlib import Path
@@ -85,7 +84,7 @@ def _show_export(export: dict) -> None:
     st.download_button(
         "下載我的學習紀錄（JSON）",
         data=payload,
-        file_name=f"study-planner-export-{_dt.date.today():%Y%m%d}.json",
+        file_name=f"study-planner-export-{export['exported_at'][:10].replace('-', '')}.json",
         mime="application/json",
         type="primary",
     )

@@ -86,10 +86,10 @@ def main() -> None:
 
 def _render_page() -> None:
     st.title("✅ 今日任務")
-    today = _dt.date.today()
     user_id = get_current_user()
 
     with session_scope() as session:
+        today = repo.user_today(session, user_id)
         plan = repo.load_active_plan(session, user_id)
         if plan is None:
             st.info("還沒有計畫。先到「Home」填條件排一份。")

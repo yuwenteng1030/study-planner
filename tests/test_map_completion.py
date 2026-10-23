@@ -10,7 +10,8 @@
 
 from __future__ import annotations
 
-import datetime as _dt
+from core import clock
+
 
 import pytest
 from sqlalchemy import func, select
@@ -25,7 +26,7 @@ OTHER_ID = 2
 
 
 def _plan(session, user_id: int = USER_ID):
-    today = _dt.date.today()
+    today = clock.today_in(None)
     core_plan = build_plan(
         topics=repo.load_topic_nodes(session),
         tasks=repo.load_task_inputs(session),
@@ -251,7 +252,7 @@ def test_export_includes_extra_completions(session) -> None:
     session.flush()
 
     export = repo.export_user_data(session, USER_ID)
-    assert export["format_version"] == 2
+    assert export["format_version"] >= 2  # 2 起才有 task_completions
     [row] = export["task_completions"]
     assert row["task_id"] == task_id
     assert row["task_url"].startswith("https://")

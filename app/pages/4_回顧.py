@@ -40,9 +40,9 @@ def main() -> None:
         "只算日子已經到了的題目；同一題排進兩份計畫就算兩次。"
     )
 
-    today = _dt.date.today()
     with session_scope() as session:
         user_id = get_current_user()
+        today = repo.user_today(session, user_id)
         items, moved, extra = repo.load_review_data(session, user_id)
         samples = repo.load_calibration_samples(session, user_id)
         names = {t.id: t.name for t in repo.load_topic_nodes(session)}
