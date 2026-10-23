@@ -124,6 +124,7 @@ def _topic_order(
     """
     prereq_map = {t.id: set(t.prereq) for t in topics}
     remaining = dict(prereq_map)
+    effective = _effective_scores(topics, scores)
     ordered: list[str] = []
 
     def release(chosen: str) -> None:
@@ -146,11 +147,57 @@ def _topic_order(
                 release(topic_id)
             continue
 
-        # 其餘按分數降冪，分數相同時用 id 定序讓結果可重現。
-        ready.sort(key=lambda t: (-scores.get(t, 0.0), t))
+        # 其餘按「有效分數」降冪；同分時自己分數高的先，再用 id 定序讓結果可重現。
+        ready.sort(key=lambda t: (-effective.get(t, 0.0), -scores.get(t, 0.0), t))
         release(ready[0])
 
     return ordered
+
+
+def _effective_scores(topics: list[TopicNode], scores: dict[str, float]) -> dict[str, float]:
+    """有效分數＝自己與所有（遞移）後置主題分數的最大值。
+
+    **2026-10-23 由 AI 實作**（使用者授權 AI 直接決定；原本依決策 #17 留給使用者自己寫）。
+
+    要解的問題：``_topic_order`` 每輪只從「前置已排完」的主題裡挑，所以高分但有前置的
+    主題（``trees`` 要 ``recursion``＋``linked_lists``）在短計畫裡永遠輪不到——前置自己
+    分數低，一直輸給別的候選。實測選了「進階演算法」目標（×1.3），10 天與 14 天的計畫
+    一題 trees／graphs／dp 都沒有，跟不選目標一模一樣：目標權重對有前置鏈的主題完全無效。
+
+    有效分數讓前置「借用」最想學的後置的分數，整條鏈一起提前。仍然遵守前置順序——
+    只改「誰先被挑」，不改「誰能被挑」。
+
+    為什麼取最大值，不取加總或平均：
+    - 加總會讓「後置很多」的基礎主題（``arrays`` 有六個後置）分數暴漲，等於把
+      「被很多主題依賴」重複計算；那件事 ``base_weight`` 已經算過了。
+    - 平均會被一堆低分後置稀釋，高分目標拉不動前置，問題就沒解。
+    - 最大值的意思是「為了你最想學的那個主題，它的前置值得同樣早排」，對應的是真實的學習動機。
+
+    代價：前置會和它的高分後置**同分**，於是可能排在本身更高分、但沒有高分後置的主題前面。
+    同分時用自己的分數決勝，所以高分後置一旦可以排，會排在它的前置之後立刻接上。
+
+    沒有題目的後置也算（例如 ``time_complexity``）：它的分數仍代表「值得學」，
+    而它本身不佔時間，借給前置不會擠掉什麼。
+    """
+    children: dict[str, set[str]] = {t.id: set() for t in topics}
+    for t in topics:
+        for parent in t.prereq:
+            if parent in children:
+                children[parent].add(t.id)
+
+    memo: dict[str, float] = {}
+
+    def best(topic_id: str, path: frozenset[str]) -> float:
+        if topic_id in memo:
+            return memo[topic_id]
+        own = scores.get(topic_id, 0.0)
+        # 循環由 _prereq_closure 負責報錯；這裡只要不無窮遞迴
+        kids = [c for c in children.get(topic_id, ()) if c not in path]
+        value = max([own] + [best(c, path | {topic_id}) for c in kids])
+        memo[topic_id] = value
+        return value
+
+    return {t.id: best(t.id, frozenset()) for t in topics}
 
 
 def _prereq_closure(topics: list[TopicNode]) -> dict[str, frozenset[str]]:

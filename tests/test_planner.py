@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from core.planner import TaskInput, TopicNode, _topic_order, build_plan
+from core.planner import TaskInput, TopicNode, _effective_scores, _topic_order, build_plan
 from core.scoring import TIER_MUST, TopicInput, UserContext, rank_topics
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -513,3 +513,65 @@ def test_no_tasks_returns_empty_plan(topics: list[TopicNode]) -> None:
     assert plan.items == []
     assert plan.dropped == []
     assert len(plan.scored_topics) == len(topics)
+
+
+# ---------------------------------------------------------------------------
+# 有效分數：高分後置把前置一起拉上來（2026-10-23，AI 實作）
+# ---------------------------------------------------------------------------
+
+
+def test_effective_score_is_the_best_of_self_and_all_descendants() -> None:
+    chain = [
+        TopicNode("a", "A", 5, ()),
+        TopicNode("b", "B", 3, ("a",)),
+        TopicNode("c", "C", 9, ("b",)),
+        TopicNode("d", "D", 7, ()),
+    ]
+    eff = _effective_scores(chain, {"a": 5.0, "b": 3.0, "c": 9.0, "d": 7.0})
+    # c 是 a 的孫子：遞移後置也算
+    assert eff == {"a": 9.0, "b": 9.0, "c": 9.0, "d": 7.0}
+
+
+def test_low_prereq_of_a_high_topic_beats_a_middling_topic() -> None:
+    """b（3 分）是 c（9 分）唯一的前置；d 7 分。舊規則先排 d，c 被卡在 b 後面。"""
+    chain = [
+        TopicNode("b", "B", 3, ()),
+        TopicNode("c", "C", 9, ("b",)),
+        TopicNode("d", "D", 7, ()),
+    ]
+    order = _topic_order(chain, {"b": 3.0, "c": 9.0, "d": 7.0}, {"b", "c", "d"})
+    assert order == ["b", "c", "d"]
+
+
+def test_ties_go_to_the_topic_that_is_itself_higher() -> None:
+    """前置借來的分數跟某個主題本身同分時，本身高分的先。"""
+    chain = [
+        TopicNode("b", "B", 3, ()),
+        TopicNode("c", "C", 8, ("b",)),
+        TopicNode("e", "E", 8, ()),
+    ]
+    order = _topic_order(chain, {"b": 3.0, "c": 8.0, "e": 8.0}, {"b", "c", "e"})
+    assert order == ["e", "b", "c"]
+
+
+def test_familiar_basics_let_advanced_topics_into_a_short_plan(
+    topics: list[TopicNode], tasks: list[TaskInput]
+) -> None:
+    """真實資料：基礎標成「已經熟」、目標選進階，14 天 × 120 分鐘要排得到 graphs。
+
+    改規則前這裡是 0 題：graphs 的另一個前置 stacks_queues（7 分，不是目標）
+    一直輸給其他候選、排得太晚，graphs 就進不了計畫。trees 在舊規則下本來就排得到，
+    所以只斷言 graphs。
+    """
+    familiar = {
+        t: "familiar"
+        for t in ("python_basic", "arrays", "strings", "hashmaps", "sorting", "greedy", "search")
+    }
+    advanced = ("recursion", "trees", "graphs", "heaps", "dp_1d", "dp_2d", "tries")
+    plan = build_plan(
+        topics, tasks, START, days=14, daily_minutes=120,
+        user=UserContext(levels=familiar, goal_topics=frozenset(advanced)),
+    )
+    by_id = {t.id: t for t in tasks}
+    picked = {by_id[i.task_id].topic_id for i in plan.items}
+    assert "graphs" in picked
