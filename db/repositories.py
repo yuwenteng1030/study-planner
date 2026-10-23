@@ -15,6 +15,7 @@ import datetime as _dt
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
+from core.calibration import Sample
 from core.planner import Plan as CorePlan
 from core.planner import ScheduledItem, TaskInput, TopicNode
 from core.replanner import Replan
@@ -559,6 +560,28 @@ def load_review_data(
         session.scalars(select(TaskCompletion.task_id).where(TaskCompletion.user_id == user_id))
     )
     return items, moved_overdue, extra
+
+
+def load_calibration_samples(session: Session, user_id: int) -> list[Sample]:
+    """估時校正要的資料：這個使用者所有計畫裡打過勾的項目，跨已收起來的計畫。
+
+    只有計畫項目有「實際分鐘數」；在地圖上做完的題目沒填，不在這裡。
+    預估值用題庫**現在**的 ``est_minutes``（計畫項目沒有另存一份）。
+    哪些紀錄能用由 ``core.calibration.usable`` 決定。
+    """
+    rows = session.execute(
+        select(
+            PlanItem.task_id, Task.difficulty, Task.est_minutes,
+            PlanItem.actual_minutes, PlanItem.done_at,
+        )
+        .join(Plan, PlanItem.plan_id == Plan.id)
+        .join(Task, PlanItem.task_id == Task.id)
+        .where(Plan.user_id == user_id, PlanItem.status == "done")
+    )
+    return [
+        Sample(task_id=t, difficulty=d, est_minutes=e, actual_minutes=a, done_at=at)
+        for t, d, e, a, at in rows
+    ]
 
 
 # ---------------------------------------------------------------------------

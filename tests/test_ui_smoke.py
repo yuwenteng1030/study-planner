@@ -235,6 +235,8 @@ def test_review_page_shows_trend_and_switches_to_months(seeded_app_db) -> None:
     assert not app.exception, [str(e.value) for e in app.exception]
     assert [m.label for m in app.metric] == ["本週完成率", "計畫裡做完的題目", "計畫外完成"]
     assert app.get("vega_lite_chart"), "應該畫出趨勢圖"
+    # 估時校正：沒有落後主題時也要畫到（以前「沒有落後」會提早 return）
+    assert "預估時間準不準" in [h.value for h in app.subheader]
 
     app.radio[0].set_value("每月").run()
     assert not app.exception, [str(e.value) for e in app.exception]

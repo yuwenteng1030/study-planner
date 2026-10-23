@@ -19,6 +19,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from api.deps import get_current_user  # noqa: E402
+from core.calibration import ACCURATE_RANGE, MIN_SAMPLES, TOO_FEW, calibrate  # noqa: E402
 from core.review import MONTH, WEEK, completion_trend, lagging_topics, period_start  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
@@ -41,7 +42,9 @@ def main() -> None:
 
     today = _dt.date.today()
     with session_scope() as session:
-        items, moved, extra = repo.load_review_data(session, get_current_user())
+        user_id = get_current_user()
+        items, moved, extra = repo.load_review_data(session, user_id)
+        samples = repo.load_calibration_samples(session, user_id)
         names = {t.id: t.name for t in repo.load_topic_nodes(session)}
 
     if not items:
@@ -62,9 +65,15 @@ def main() -> None:
         "在別處做完了就不算。「被往後挪」與原本的日子從 2026-10-23 起才有紀錄。"
     )
     lags = lagging_topics(items, moved, names, today, done_elsewhere=extra)
-    if not lags:
+    if lags:
+        _render_lags(lags)
+    else:
         st.success("目前沒有落後的主題。")
-        return
+
+    _render_calibration(samples)
+
+
+def _render_lags(lags) -> None:
     st.dataframe(
         pd.DataFrame(
             [
@@ -153,6 +162,47 @@ def _render_trend(rows) -> None:
             width="stretch",
             column_config={"完成率": st.column_config.ProgressColumn("完成率", format="percent", min_value=0, max_value=1)},
         )
+
+
+def _render_calibration(samples) -> None:
+    st.subheader("預估時間準不準")
+    result = calibrate(samples)
+    low, high = ACCURATE_RANGE
+    st.caption(
+        f"比的是打勾時填的「實際花了幾分鐘」÷ 題庫的預估。用中位數，每個難度至少 {MIN_SAMPLES} 筆才下結論；"
+        f"比例在 {low:g}–{high:g} 倍之間算準。**沒改過預估值就打勾的不算**（分不出是真的剛好準時，"
+        "還是沒填），所以真的準時的題也會被排除，這裡看到的「多準」偏保守。"
+        "同一題做過好幾次只算第一次。只看不改：預估值不會因此自動調整。"
+    )
+    usable_n = result.groups[-1].n
+    if usable_n == 0:
+        st.info(
+            f"還沒有能用的紀錄（{result.excluded} 筆打勾紀錄都不能用：沒改過預估值、填 0、或同一題重做）。"
+            "做完一題時，把「實際花了幾分鐘」改成真的花的時間再打勾。"
+        )
+        return
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "難度": g.label,
+                    "筆數": g.n,
+                    "實際÷預估": None if g.median_ratio is None else round(g.median_ratio, 2),
+                    "差幾分鐘": None if g.median_diff is None else g.median_diff,
+                    "結論": g.verdict if g.verdict != TOO_FEW else f"{TOO_FEW}（要 {MIN_SAMPLES} 筆）",
+                }
+                for g in result.groups
+            ]
+        ),
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "實際÷預估": st.column_config.NumberColumn(format="%.2f 倍"),
+            "差幾分鐘": st.column_config.NumberColumn(format="%+g 分", help="中位數。正的＝比預估久。"),
+        },
+    )
+    if result.excluded:
+        st.caption(f"另有 {result.excluded} 筆打勾紀錄沒算進來（沒改過預估值、填 0、或同一題重做）。")
 
 
 main()
