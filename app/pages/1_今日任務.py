@@ -51,8 +51,8 @@ def _cheer(item) -> None:
         topic_name=item.task.topic.name,
         difficulty=item.task.difficulty,
         est_minutes=item.task.est_minutes,
-        # 沒改過的話這一欄就是預估值：當成「實際」告訴 Claude 等於捏造一個準時的事實
-        actual_minutes=item.actual_minutes if item.actual_minutes != item.task.est_minutes else None,
+        # 輸入框預設空白，沒填就是 None：不會把預估值當成「實際」告訴 Claude
+        actual_minutes=item.actual_minutes,
         today_done=sum(1 for i in same_day if i.status == "done"),
         today_total=len(same_day),
     )
@@ -140,8 +140,11 @@ def _render_page() -> None:
             return
 
         st.subheader(f"{today:%m/%d}（{summary['today_minutes']} 分鐘）")
+        seen_topics: set[str] = set()
         for item in today_items:
-            _render_item(session, item)
+            topic_id = item.task.topic_id
+            _render_item(session, item, show_key_points=topic_id not in seen_topics)
+            seen_topics.add(topic_id)
 
         with progress_slot:
             # 重新算一次，不要沿用迴圈之前的 ``summary``。
@@ -211,7 +214,7 @@ def _map_link(task_id: int) -> None:
         pass
 
 
-def _render_item(session, item) -> None:
+def _render_item(session, item, show_key_points: bool = True) -> None:
     """一張任務卡。打勾即寫入 ``progress_events``。
 
     這裡刻意**不呼叫** ``st.rerun()``。
@@ -240,7 +243,7 @@ def _render_item(session, item) -> None:
 
         # 先處理狀態變更，再決定怎麼顯示；否則這一輪會顯示變更前的舊狀態。
         if checked and item.status != "done":
-            recorded = st.session_state.get(f"actual_{item.id}", task.est_minutes)
+            recorded = st.session_state.get(f"actual_{item.id}")
             # 用 `int(recorded) or None` 會把刻意填的 0 當成「沒填」而丟掉。
             # 這個欄位的資料事後補不回來，所以 0 也要存。
             repo.mark_item_done(
@@ -269,17 +272,23 @@ def _render_item(session, item) -> None:
             st.caption(
                 "✨ Claude 即時生成" if item.reason_source == "llm" else "📌 預存說明（未使用 AI 生成）"
             )
-        if item.key_points:
-            st.caption("重點：" + "、".join(repo.key_point_text(p) for p in item.key_points))
+        # 同一主題的重點都一樣，一天裡只在該主題的第一張卡顯示
+        if item.key_points and show_key_points:
+            st.caption(
+                f"{task.topic.name} 的重點："
+                + "、".join(repo.key_point_text(p) for p in item.key_points)
+            )
 
         # 實際分鐘數一律顯示，不是打勾之後才出現：
         # 要讓使用者先填再打勾，否則打勾的那一瞬間還沒有值可以記。
-        # estimator 排在 v0.2，但這個欄位從現在就開始收——事後補不回來。
+        # 預設**空白**而不是預估值：預設預估值的話，沒填就打勾會存下一筆「剛好準時」，
+        # 估時校正分不出真假，只好把所有「等於預估」的都丟掉（2026-10-23 前的做法）。
         st.number_input(
             "實際花了幾分鐘？",
             min_value=0,
             max_value=600,
-            value=item.actual_minutes or task.est_minutes,
+            value=item.actual_minutes,
+            placeholder=f"沒填就不算進估時校正（預估 {task.est_minutes}）",
             step=5,
             key=f"actual_{item.id}",
             help="打勾時會一起記錄下來。之後用來校正預估時間。",

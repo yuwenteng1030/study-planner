@@ -24,11 +24,11 @@ def _group(result, label):
     return next(g for g in result.groups if g.label == label)
 
 
-def test_untouched_default_zero_and_blank_are_not_usable() -> None:
-    """沒改過的預設值（＝預估）當成「準時」會讓預估看起來比實際準。"""
+def test_zero_and_blank_are_not_usable_but_an_exact_match_is() -> None:
+    """輸入框預設空白（2026-10-23 起），所以「沒填」就是 None；填了剛好等於預估是真的準時。"""
     kept, excluded = usable([_s(1, 20), _s(2, 0), _s(3, None), _s(4, 30)])
-    assert [s.task_id for s in kept] == [4]
-    assert excluded == 3
+    assert [s.task_id for s in kept] == [1, 4]
+    assert excluded == 2
 
 
 def test_only_the_first_attempt_at_a_task_counts() -> None:
@@ -40,7 +40,7 @@ def test_only_the_first_attempt_at_a_task_counts() -> None:
 
 def test_first_attempt_that_was_untouched_hides_the_retry_too() -> None:
     """第一次沒填，就不拿第二次頂替——第二次量的不是預估要估的東西。"""
-    kept, _ = usable([_s(1, 20, minutes_later=0), _s(1, 12, minutes_later=60)])
+    kept, _ = usable([_s(1, None, minutes_later=0), _s(1, 12, minutes_later=60)])
     assert kept == []
 
 

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.planner import build_plan
 from core.replanner import replan
-from core.scoring import TIER_BONUS, TIER_MUST, TIER_RECOMMENDED, UserContext
+from core.scoring import TIER_BONUS, TIER_MUST, TIER_RECOMMENDED
 from db import repositories as repo
 from db.models import Base, PlanItem, ProgressEvent, Task, Topic, User
 
@@ -455,6 +455,8 @@ def test_must_items_survive_aggressive_culling(session: Session) -> None:
         if i.status == "skipped" and i.priority == TIER_MUST
     }
     assert not skipped_must, "必學項目被砍掉了"
+    surviving = {i.task_id for i in reloaded.items if i.status != "skipped"}
+    assert must_before <= surviving, "重排前的必學項目有的不見了"
     # 相對地，加分項目本來就該先被砍。
     culled_tiers = {i.priority for i in reloaded.items if i.status == "skipped"}
     if culled_tiers:

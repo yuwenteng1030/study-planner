@@ -14,11 +14,8 @@ anthropic==1.17.0
 PyYAML==6.0.3
 pandas==3.0.6
 python-dotenv==1.2.4
+# 回顧頁的圖表直接 import altair；不能只靠 streamlit 間接帶進來
+altair==6.3.0
 
-# v0.2
-fastapi==0.156.6
-uvicorn==0.54.0
-httpx==0.28.1
-
-# 開發
-pytest==9.1.1
+# FastAPI／uvicorn／httpx 等 v0.2 真的拆出 API 時再加回來（現在沒有任何程式用到）。
+# 測試與 lint 在 requirements-dev.txt。

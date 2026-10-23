@@ -16,6 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from core.calibration import Sample
+from core.game_map import PlanMarks
 from core.planner import Plan as CorePlan
 from core.planner import ScheduledItem, TaskInput, TopicNode
 from core.replanner import Replan
@@ -481,10 +482,8 @@ def _record(
 # ---------------------------------------------------------------------------
 
 
-def plan_marks(plan: Plan | None, today: _dt.date) -> "PlanMarks":
+def plan_marks(plan: Plan | None, today: _dt.date) -> PlanMarks:
     """進行中計畫 → 地圖上的「今天」與「過期」標記。被移出計畫的項目不標。"""
-    from core.game_map import PlanMarks
-
     if plan is None:
         return PlanMarks()
     items = [i for i in plan.items if i.status != "skipped"]

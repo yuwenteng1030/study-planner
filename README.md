@@ -1,5 +1,7 @@
 # study-planner
 
+[![CI](https://github.com/yuwenteng1030/study-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/yuwenteng1030/study-planner/actions/workflows/ci.yml)
+
 想學一樣東西，但不知道「現在最該學什麼」——這個網頁回答這件事。
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
@@ -162,7 +164,7 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 
 三個會讓數字說謊的地方，算的時候排除掉：
 
-- **沒改過的預設值**：輸入框預設就是預估值，沒填就打勾會存下一筆「剛好準時」。分不出是真的準時還是沒填，所以實際等於預估的一律不算。代價是真的準時的題也被排除，「多準」會偏保守。
+- **沒填的**：輸入框預設是空白，沒填就打勾存的是「沒有數字」，不算。（原本預設是預估值，沒填就會存下一筆假的「剛好準時」，只好把所有等於預估的都丟掉，連真的準時也一起丟。改成空白後不必猜。）
 - **同一題重做**：只算第一次。第二次通常快很多，算進來會把預估拉成高估。
 - **0 分鐘**：照存（使用者刻意填的），但比例沒有意義，不算。
 
@@ -177,10 +179,11 @@ Python 3.14、Streamlit、SQLAlchemy 2.x、SQLite（之後 PostgreSQL）、Claud
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 匯入 data/topics.yaml 與 data/tasks.csv
 pytest -q                          # 274 個測試
+ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
 
@@ -199,7 +202,7 @@ streamlit run app/Home.py
 | `tests/test_map_art.py` | 地圖插畫：每題一個連結、後面的區畫在上方、一排只屬一個主題、S 形折返、區名不壓在小路上、小熊不蓋住關卡、只放行 HackerRank 網址、文字跳脫 |
 | `tests/test_map_completion.py` | 地圖上的「我 submit 過了」：計畫內勾計畫項目、計畫外另存一筆、按兩次只記一次、取消要連舊計畫一起清、不存在的題目擋下 |
 | `tests/test_review.py` | 回顧：照原本的日子分期、還沒到的日子不算、砍掉的題目留在分母、四種落後訊號分開數、只有過期後被挪才算落後（用真的排程器測）、舊計畫沒輪到的題不進分母 |
-| `tests/test_calibration.py` | 估時校正：沒改過的預設值、0 分鐘、重做的題不算，中位數不被一題拖走，筆數不夠不下結論，只撈自己打勾的項目 |
+| `tests/test_calibration.py` | 估時校正：沒填、0 分鐘、重做的題不算（剛好等於預估的算），中位數不被一題拖走，筆數不夠不下結論，只撈自己打勾的項目 |
 | `tests/test_map_plan_link.py` | 地圖與每日計畫連動：今天的關卡藍圈、過期的紅圈、被移出計畫的不標、小熊照今天的順序走、今天做完回到路線 |
 | `tests/test_stars.py` | 星等：一星看 Easy 3 題、二星 Medium 過半、三星 Hard 全做、不能跳級、觀念關沒有星 |
 | `tests/test_task_data.py` | 題庫說明沒有被 CSV 逗號截斷、每列欄位數正確 |

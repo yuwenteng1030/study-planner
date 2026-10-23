@@ -59,6 +59,10 @@ def main() -> None:
         {t.topic_id for t in tasks}, key=lambda tid: topic_names.get(tid, tid)
     )
 
+    # 已有計畫的提示放在表單**上面**：放在下面要捲過整張表單才看得到，
+    # 使用者會以為要重填一次才能開始。位置先佔住，送出表單的那一輪就不顯示舊計畫。
+    hint_slot = st.empty()
+
     with st.form("plan_form"):
         st.subheader("1. 你的目標")
         goal = st.selectbox(
@@ -103,7 +107,8 @@ def main() -> None:
         submitted = st.form_submit_button("排出計畫", type="primary")
 
     if not submitted:
-        _show_existing_plan_hint()
+        with hint_slot.container():
+            _show_existing_plan_hint()
         return
 
     overlap = set(familiar) & set(brand_new)
@@ -245,7 +250,7 @@ def _show_existing_plan_hint() -> None:
             f"你已經有一份進行中的計畫（{plan.start_date:%m/%d} 起、"
             f"{plan.days} 天），完成 {summary['overall_done']}/"
             f"{summary['overall_total']} 題。"
-            "到左邊的「今日任務」繼續，或在上面重新排一份（舊的會被收起來）。"
+            "到左邊的「今日任務」繼續，或在下面重新排一份（舊的會被收起來）。"
         )
 
 

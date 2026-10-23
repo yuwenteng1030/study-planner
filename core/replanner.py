@@ -22,7 +22,7 @@ import datetime as _dt
 from dataclasses import dataclass, field
 
 from core.planner import ScheduledItem
-from core.scoring import TIER_BONUS, TIER_MUST, TIER_RECOMMENDED
+from core.scoring import TIER_BONUS, TIER_RECOMMENDED
 
 #: 砍項目的順序：先砍加分，再砍建議。``must`` 不在這個清單裡，所以永遠不會被砍。
 CULL_ORDER: tuple[str, ...] = (TIER_BONUS, TIER_RECOMMENDED)

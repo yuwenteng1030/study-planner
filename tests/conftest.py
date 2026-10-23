@@ -10,6 +10,11 @@ pytest 會在載入測試模組之前先載入 conftest，所以這裡設定得�
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.planner import TaskInput, TopicNode
+
 import csv
 import os
 import tempfile

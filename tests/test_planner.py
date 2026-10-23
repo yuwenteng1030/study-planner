@@ -20,7 +20,7 @@ import pytest
 import yaml
 
 from core.planner import TaskInput, TopicNode, _effective_scores, _topic_order, build_plan
-from core.scoring import TIER_MUST, TopicInput, UserContext, rank_topics
+from core.scoring import TopicInput, UserContext, rank_topics
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TOPICS_PATH = PROJECT_ROOT / "data" / "topics.yaml"

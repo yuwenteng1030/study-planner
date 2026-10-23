@@ -170,14 +170,13 @@ def _render_calibration(samples) -> None:
     low, high = ACCURATE_RANGE
     st.caption(
         f"比的是打勾時填的「實際花了幾分鐘」÷ 題庫的預估。用中位數，每個難度至少 {MIN_SAMPLES} 筆才下結論；"
-        f"比例在 {low:g}–{high:g} 倍之間算準。**沒改過預估值就打勾的不算**（分不出是真的剛好準時，"
-        "還是沒填），所以真的準時的題也會被排除，這裡看到的「多準」偏保守。"
+        f"比例在 {low:g}–{high:g} 倍之間算準。**沒填分鐘數就打勾的不算**。"
         "同一題做過好幾次只算第一次。只看不改：預估值不會因此自動調整。"
     )
     usable_n = result.groups[-1].n
     if usable_n == 0:
         st.info(
-            f"還沒有能用的紀錄（{result.excluded} 筆打勾紀錄都不能用：沒改過預估值、填 0、或同一題重做）。"
+            f"還沒有能用的紀錄（{result.excluded} 筆打勾紀錄都不能用：沒填分鐘數、填 0、或同一題重做）。"
             "做完一題時，把「實際花了幾分鐘」改成真的花的時間再打勾。"
         )
         return
@@ -202,7 +201,7 @@ def _render_calibration(samples) -> None:
         },
     )
     if result.excluded:
-        st.caption(f"另有 {result.excluded} 筆打勾紀錄沒算進來（沒改過預估值、填 0、或同一題重做）。")
+        st.caption(f"另有 {result.excluded} 筆打勾紀錄沒算進來（沒填分鐘數、填 0、或同一題重做）。")
 
 
 main()

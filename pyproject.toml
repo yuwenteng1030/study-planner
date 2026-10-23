@@ -1,0 +1,15 @@
+# 只放工具設定；專案不打包成套件，依賴照舊寫在 requirements*.txt。
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+# 預設的 E/F 規則：抓沒用到的 import、未定義的名字、沒用到的變數這類真的錯誤。
+select = ["E", "F"]
+# 中文註解與長的 f-string 常超過行寬；行寬交給人判斷，不讓 lint 擋。
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
