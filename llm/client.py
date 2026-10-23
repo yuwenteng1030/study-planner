@@ -135,6 +135,12 @@ def _reserve_explain_quota(user_id: int, wanted: int, quota: int) -> int:
         return granted
 
 
+def _refund_explain_quota(user_id: int, count: int) -> None:
+    key = (user_id, _dt.date.today().isoformat())
+    with _quota_lock:
+        _explain_calls[key] = max(0, _explain_calls.get(key, 0) - count)
+
+
 def explain_many(
     tasks: list[dict],
     model: str = DEFAULT_MODEL,
@@ -181,6 +187,10 @@ def explain_many(
         with ThreadPoolExecutor(max_workers=EXPLAIN_WORKERS) as pool:
             results = list(pool.map(one, indexed))
     out.update({task["id"]: r for task, r in zip(todo, results)})
+    if user_id is not None and allowed:
+        # 失敗的呼叫（key 失效、429、逾時）不該吃掉當天額度：只收成功生成的
+        succeeded = sum(1 for r in results[:allowed] if r.is_generated)
+        _refund_explain_quota(user_id, allowed - succeeded)
     return out
 
 

@@ -150,6 +150,21 @@ def test_reused_reasons_cost_nothing(monkeypatch) -> None:
     assert out[3].text == "一句客製說明"
 
 
+def test_failed_calls_do_not_burn_the_quota(monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    import anthropic
+
+    class Down(_FakeAnthropic):
+        def _create(self, **kw):
+            raise RuntimeError("429")
+
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **kw: Down(**kw))
+    client_mod.explain_many(_fake_tasks(4), user_id=903, quota=4)
+    calls = _count_calls(monkeypatch)  # 恢復後，額度還在
+    client_mod.explain_many(_fake_tasks(4), user_id=903, quota=4)
+    assert len(calls) == 4
+
+
 def test_daily_quota_caps_calls_and_rest_fall_back(monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
     calls = _count_calls(monkeypatch)
@@ -170,3 +185,24 @@ def test_earlier_generated_reasons_are_loaded_per_user(db_session) -> None:
     _make(db_session, core_plan, explanations)
     assert repo.load_generated_reasons(db_session, 1) == {first: "以前的一句"}
     assert repo.load_generated_reasons(db_session, 2) == {}
+
+
+def test_skipped_and_other_users_reasons_are_not_reused(db_session) -> None:
+    core_plan, inputs = _inputs(db_session)
+    a, b = inputs[0]["id"], inputs[1]["id"]
+    plan = _make(db_session, core_plan, {
+        a: client_mod.Explanation("甲", "llm"), b: client_mod.Explanation("乙", "llm")})
+    item = db_session.scalars(
+        select(PlanItem).where(PlanItem.plan_id == plan.id, PlanItem.task_id == b)).one()
+    item.status = "skipped"
+    item.reason = "容量不足（原推薦理由：乙）"
+    db_session.flush()
+    assert repo.load_generated_reasons(db_session, 1) == {a: "甲"}
+    repo.ensure_user(db_session, 2)
+    assert repo.load_generated_reasons(db_session, 2) == {}
+
+
+def test_explain_inputs_follow_the_given_order(db_session) -> None:
+    _, inputs = _inputs(db_session)
+    ids = [i["id"] for i in inputs][::-1]
+    assert [i["id"] for i in repo.load_explain_inputs(db_session, ids)] == ids

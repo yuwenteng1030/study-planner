@@ -15,6 +15,7 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from db.models import Base
@@ -70,7 +71,12 @@ def _add_missing_columns() -> None:
         for table, column, sql_type in _ADDED_COLUMNS:
             existing = {c["name"] for c in inspector.get_columns(table)}
             if column not in existing:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
+                except OperationalError as exc:
+                    # 另一個行程剛好先補上了：不是錯誤
+                    if "duplicate column" not in str(exc).lower():
+                        raise
 
 
 def _ensure_schema() -> None:

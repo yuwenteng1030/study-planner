@@ -117,7 +117,9 @@ def load_task_static_notes(session: Session) -> dict[int, str | None]:
 def load_explain_inputs(session: Session, task_ids: list[int]) -> list[dict]:
     """``llm.client.explain_many`` 要的輸入：題名、主題名、主題重點、預存說明。"""
     topic_rows = {t.id: t for t in session.scalars(select(Topic)).all()}
-    tasks = session.scalars(select(Task).where(Task.id.in_(task_ids))).all()
+    by_id = {t.id: t for t in session.scalars(select(Task).where(Task.id.in_(task_ids)))}
+    # 照傳進來的順序（＝計畫的先後）：額度不夠時，LLM 先分給最早要做的題目
+    tasks = [by_id[i] for i in dict.fromkeys(task_ids) if i in by_id]
     out = []
     for task in tasks:
         topic = topic_rows.get(task.topic_id)
