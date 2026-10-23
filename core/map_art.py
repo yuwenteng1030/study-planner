@@ -424,7 +424,8 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
     parts.append(
         '<g class="platform">'
         + farm_art.island(x, iy, rx=rx, ry=11, top=top)
-        + farm_art.landmark(farm_art.landmark_kind(s.topic_id), x, iy + 2, boss=boss)
+        + farm_art.island_accessory(x, iy, s.task_id)
+        + farm_art.landmark(farm_art.landmark_kind(s.topic_id), x, iy + 2, boss=boss, variant=s.task_id)
     )
     # 關卡編號的小牌：做完是金色打勾，沒做是白底、外框是難度顏色
     plate_fill, plate_rim, text_fill = (GOLD, "#C98A1E", INK) if s.done else ("#FFFFFF", color, color)

@@ -264,21 +264,28 @@ def _well(x: float, y: float) -> str:
     )
 
 
-def _barn(x: float, y: float) -> str:
+_BARN_COLORS = (("#C8473A", "#9E3529"), ("#4F86C6", "#356196"), ("#6FAA4E", "#4D823A"))
+_TENT_COLORS = (("#E9B44C", "#C88F2E"), ("#E86A5C", "#B94B40"), ("#5AA7D6", "#3A82B0"))
+_CAP_COLORS = (("#D9473C", "#A9352C"), ("#8E64B8", "#674590"), ("#E39A3B", "#B8742A"))
+
+
+def _barn(x: float, y: float, variant: int = 0) -> str:
+    wall, wall_dark = _BARN_COLORS[variant % len(_BARN_COLORS)]
     return (
-        f'<rect x="{x - 11}" y="{y - 14}" width="22" height="14" fill="#C8473A"/>'
-        f'<rect x="{x + 2}" y="{y - 14}" width="9" height="14" fill="#9E3529"/>'
+        f'<rect x="{x - 11}" y="{y - 14}" width="22" height="14" fill="{wall}"/>'
+        f'<rect x="{x + 2}" y="{y - 14}" width="9" height="14" fill="{wall_dark}"/>'
         f'<polygon points="{x - 13},{y - 14} {x + 13},{y - 14} {x},{y - 25}" fill="#7A3B2C"/>'
         f'<polygon points="{x},{y - 25} {x + 13},{y - 14} {x},{y - 14}" fill="#5E2C20"/>'
         f'<rect x="{x - 4}" y="{y - 9}" width="8" height="9" fill="{WALL}"/>'
-        f'<path d="M{x - 4},{y - 9} L{x + 4},{y} M{x + 4},{y - 9} L{x - 4},{y}" stroke="#C8473A" stroke-width="1.2"/>'
+        f'<path d="M{x - 4},{y - 9} L{x + 4},{y} M{x + 4},{y - 9} L{x - 4},{y}" stroke="{wall}" stroke-width="1.2"/>'
     )
 
 
-def _tent(x: float, y: float) -> str:
+def _tent(x: float, y: float, variant: int = 0) -> str:
+    canvas, canvas_dark = _TENT_COLORS[variant % len(_TENT_COLORS)]
     return (
-        f'<polygon points="{x - 13},{y} {x},{y - 22} {x + 13},{y}" fill="#E9B44C"/>'
-        f'<polygon points="{x},{y - 22} {x + 13},{y} {x + 2},{y}" fill="#C88F2E"/>'
+        f'<polygon points="{x - 13},{y} {x},{y - 22} {x + 13},{y}" fill="{canvas}"/>'
+        f'<polygon points="{x},{y - 22} {x + 13},{y} {x + 2},{y}" fill="{canvas_dark}"/>'
         f'<polygon points="{x - 4},{y} {x},{y - 10} {x + 4},{y}" fill="{WOOD_DARK}"/>'
         f'<line x1="{x}" y1="{y - 22}" x2="{x}" y2="{y - 28}" stroke="{WOOD_DARK}" stroke-width="1.5"/>'
         f'<polygon points="{x},{y - 28} {x + 7},{y - 26} {x},{y - 24}" fill="#D9573F"/>'
@@ -305,12 +312,13 @@ def _haystack(x: float, y: float) -> str:
     )
 
 
-def _mushroom_house(x: float, y: float) -> str:
+def _mushroom_house(x: float, y: float, variant: int = 0) -> str:
+    cap, cap_dark = _CAP_COLORS[variant % len(_CAP_COLORS)]
     return (
         f'<rect x="{x - 6}" y="{y - 12}" width="12" height="12" fill="{WALL}" rx="2"/>'
         f'<rect x="{x}" y="{y - 12}" width="6" height="12" fill="#D8C59D" rx="2"/>'
-        f'<path d="M{x - 14},{y - 12} Q{x},{y - 34} {x + 14},{y - 12} Z" fill="#D9473C"/>'
-        f'<path d="M{x},{y - 23} Q{x + 9},{y - 22} {x + 14},{y - 12} L{x},{y - 12} Z" fill="#A9352C"/>'
+        f'<path d="M{x - 14},{y - 12} Q{x},{y - 34} {x + 14},{y - 12} Z" fill="{cap}"/>'
+        f'<path d="M{x},{y - 23} Q{x + 9},{y - 22} {x + 14},{y - 12} L{x},{y - 12} Z" fill="{cap_dark}"/>'
         f'<circle cx="{x - 6}" cy="{y - 18}" r="2.2" fill="#FFFFFF"/><circle cx="{x + 3}" cy="{y - 22}" r="1.8" fill="#FFFFFF"/>'
         f'<rect x="{x - 2}" y="{y - 7}" width="4" height="7" fill="{WOOD_DARK}" rx="1.5"/>'
     )
@@ -388,9 +396,44 @@ def landmark_kind(topic_id: str) -> str:
     return names[sum(map(ord, topic_id)) % len(names)]
 
 
-def landmark(kind: str, x: float, y: float, *, boss: bool = False) -> str:
-    """畫在小島上的地標，``(x, y)`` 是地標的底部中心。Boss 關一律是城堡。"""
-    draw = _castle if boss else _LANDMARKS.get(kind, _tent)
+#: 有配色變化的地標（其餘的造型本身就夠有辨識度）
+_COLOR_VARIANTS = {"barn", "tent", "mushroom"}
+
+
+def island_accessory(x: float, y: float, variant: int) -> str:
+    """小島邊上的小擺設，依關卡輪流換：樹叢、花、石頭、南瓜（或什麼都不放）。讓同主題的關卡不會一模一樣。"""
+    k = variant % 5
+    if k == 1:
+        return bush(x - 17, y + 2)
+    if k == 2:
+        return flowers(x + 15, y + 3, seed=variant)
+    if k == 3:
+        return (
+            f'<g {_NOPTR}>' + shadow(x - 15, y + 5, 5, 2)
+            + f'<ellipse cx="{x - 16:.1f}" cy="{y + 2:.1f}" rx="5" ry="3.5" fill="{STONE}"/>'
+            f'<ellipse cx="{x - 17:.1f}" cy="{y + 1:.1f}" rx="2" ry="1.2" fill="#FFFFFF" opacity="0.5"/></g>'
+        )
+    if k == 4:
+        return (
+            f'<g {_NOPTR}>' + shadow(x + 16, y + 6, 5, 2)
+            + f'<ellipse cx="{x + 15:.1f}" cy="{y + 3:.1f}" rx="5" ry="4" fill="#E8862E"/>'
+            f'<path d="M{x + 15:.1f},{y - 1:.1f} v-3" stroke="{LEAF_DARK}" stroke-width="1.5"/></g>'
+        )
+    return ""
+
+
+def landmark(kind: str, x: float, y: float, *, boss: bool = False, variant: int = 0) -> str:
+    """畫在小島上的地標，``(x, y)`` 是地標的底部中心。Boss 關一律是城堡。
+
+    ``variant``（通常是題目 id）決定配色與小擺設，讓同主題的關卡有小小的不同。
+    """
+    if boss:
+        draw = _castle
+    elif kind in _COLOR_VARIANTS:
+        base = _LANDMARKS[kind]
+        draw = lambda x, y: base(x, y, variant)  # noqa: E731
+    else:
+        draw = _LANDMARKS.get(kind, _tent)
     # 以底部中心放大 1.3 倍：地圖縮在畫面上時，原尺寸的小建築太小看不清楚
     return (
         f'<g class="landmark" transform="translate({x:.1f},{y:.1f}) scale({LANDMARK_SCALE}) '

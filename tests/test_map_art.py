@@ -388,3 +388,17 @@ def test_every_landmark_kind_draws_and_topics_map_to_one() -> None:
         assert "<g class=\"landmark\"" in farm_art.landmark(kind, 100, 100)
     assert farm_art.landmark_kind("arrays") == "barn"
     assert farm_art.landmark_kind("some_new_topic") in farm_art._LANDMARKS
+
+
+def test_levels_of_the_same_topic_look_slightly_different() -> None:
+    """同一個主題的關卡：同一種建築，但配色或小擺設不一樣（每關都一樣會很單調）。"""
+    import re
+
+    from core import farm_art
+
+    drawings = {farm_art.island_accessory(0, 0, v) + farm_art.landmark("barn", 0, 0, variant=v) for v in range(6)}
+    assert len(drawings) >= 5
+    # 但都還是穀倉：屋頂的形狀一樣
+    roofs = {re.search(r'points="([^"]+)" fill="#7A3B2C"', farm_art.landmark("barn", 0, 0, variant=v)).group(1)
+             for v in range(6)}
+    assert len(roofs) == 1
