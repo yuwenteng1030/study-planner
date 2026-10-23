@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，335 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、公開展示版皆可運作，363 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -168,6 +168,18 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 
 **代價**：訪客帳號與正式資料放在同一個資料庫、靠 `user_id` 隔開，隔離的強度就是 repository 層每一句查詢都有帶 `user_id`，這件事由 `tests/test_demo.py` 與 `tests/test_user_data.py` 守著。
 
+### 14. JD 出處用關鍵字比對，不用 Claude
+
+貼上職缺描述後，「職缺JD」頁列出每個主題出現在幾份 JD、引用哪一句原文，排計畫時用 `jd_factor = 1 + 提到的份數 ÷ 總份數` 加權（設計決策 2）。比對在 `core/jd_parser.py`：
+
+- **出處一定是原文**。這個功能的賣點是「每個主題附出處」；讓模型挑句子，它可能改寫、合併或編一句出來，還得另外驗證。關鍵字比對引用的就是原文那一句（`test_quote_is_the_original_sentence_and_points_at_the_keyword`）。
+- **只認明確的詞，寧可漏抓**。`jd_factor` 會改變排序，誤判比漏抓傷害大：`tech stack`、`message queue`、`Main Street` 都不能算成資料結構。「資料結構」「演算法」這種泛稱不替任何主題加分（全部加分等於沒加），另外列出來。SQL、Linux、Docker 這類題庫練不到的技能也另外列，讓使用者知道刷題之外還要準備什麼。
+- **一份 JD 提到同一主題十次也只算一份**：量的是「多少比例的職缺要這個」，不是誰寫得囉嗦。
+- **只存原文，分析每次重算**。關鍵字清單改了，舊 JD 馬上套用新規則，不會有一份過期的分析結果跟原文對不上。
+- **JD 不是學習紀錄**：「清除學習紀錄」保留 JD，刪帳號才一起刪；匯出檔（格式版本 4）包含 JD 原文。
+
+**代價**：漏抓。JD 寫「處理大量交易資料」不會被算成 arrays，英文以外只認繁簡中文的固定詞。v0.3 的 RAG 可以補這塊，但出處仍然要能對回原文。
+
 ## 排程規則
 
 1. **前置先排**：某主題的題目不得排在它的前置主題的題目之前。
@@ -208,7 +220,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 335 個測試
+pytest -q                          # 363 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
@@ -269,6 +281,7 @@ STUDY_PLANNER_DEMO=1 DATABASE_URL=sqlite:///demo.db streamlit run app/Home.py
 | `tests/test_quota_db.py` | 額度存資料庫：重開不歸零、退回沒用到的次數、不同用途分開算 |
 | `tests/test_game_map.py`（續） | 重點路線依階段分區、經驗值（Easy 10／Medium 25／Hard 50）、重點題組 30 題且 Medium 過半 |
 | `tests/test_adventure.py` | 冒險計時：分鐘無條件進位且有上限、同一題重按不重新計時、換題重新計時、打勾自動記分鐘（自己填的優先）、地圖計畫外完成也記分鐘並算進估時校正、刪帳號一併刪除 |
+| `tests/test_jd.py` | JD 出處：引用一定是原文並指到關鍵字、長得像的詞不算（tech stack、Main Street）、泛稱不加分、題庫外技能另列、一份只算一次、markdown 不能注入、只刪得到自己的、清紀錄保留 JD、貼了 JD 的主題真的排得比較前面、頁面存檔與展示版範例 JD |
 | `tests/test_demo.py` | 公開展示版：每個分頁一個訪客、範例計畫只留昨天一題沒做而且重排不會超時、過期只清訪客、展示版不呼叫 Claude、空資料庫自動匯入題庫、五個頁面對新訪客都畫得出來 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 

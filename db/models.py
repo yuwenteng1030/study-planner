@@ -12,7 +12,7 @@
 的 `get_current_user()`，不必動任何一張表或任何一句查詢。
 
 v0.1.5／v0.2 才會用到的 3 張表（`topic_demand`、`user_task_stats`、
-`jds`）刻意不在這裡建，隨各自的功能一起進來。`api_usage` 2026-10-23 加入（額度改存資料庫）。
+`jds`）刻意不在這裡建，隨各自的功能一起進來。`api_usage` 2026-10-23 加入（額度改存資料庫），`jds` 2026-10-24 隨 JD 出處引用加入。
 
 **schema 變更一律寫 Alembic migration**（`db/migrations/versions/`），不要只改這個檔案。
 """
@@ -407,3 +407,26 @@ class ActiveAdventure(Base):
     task_id: Mapped[int] = mapped_column(Integer, ForeignKey("tasks.id"), nullable=False)
     #: 開始的時間（UTC）
     started_at: Mapped[_dt.datetime] = mapped_column(DateTime, nullable=False)
+
+
+class JobDescription(Base):
+    """使用者貼上的一份職缺描述。
+
+    只存原文，不存分析結果：「提到哪些主題、引用哪一句」每次從原文用
+    ``core.jd_parser.analyze`` 算出來。關鍵字清單改了，舊的 JD 馬上套用新規則，
+    不會有一份過期的分析結果躺在資料庫裡跟原文對不上。
+    表名照架構設計文件叫 ``jds``。
+    """
+
+    __tablename__ = "jds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    #: 使用者自己取的名字（例如「後端工程師 A」），列表與出處裡顯示用。
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[_dt.datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )

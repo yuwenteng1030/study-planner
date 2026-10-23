@@ -3,7 +3,7 @@
 部署成公開網址之後，單人模式的 ``user_id=1`` 會變成「所有人共用一份資料」：
 甲排的計畫乙看得到，乙按「刪除帳號」會把甲的進度一起刪掉。所以展示版裡
 **每個瀏覽器分頁各自一個訪客帳號**，而且一打開就已經有一份進行到第 4 天的計畫
-（做完幾題、昨天漏了一題），面試官不用先填表就看得到地圖、重排與回顧頁。
+（做完幾題、昨天漏了一題）和兩份範例 JD，面試官不用先填表就看得到地圖、重排與回顧頁。
 
 訪客帳號放在同一個資料庫、用 ``user_id`` 隔開——這正是「所有資料表從第一版就帶
 user_id」的用途。舊的訪客帳號在有人新進來時順手清掉，資料庫不會無限長大。
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from core import clock
 from core.goals import GOAL_PRESETS
 from core.planner import build_plan
-from core.scoring import JDStats, UserContext
+from core.scoring import UserContext
 from db import repositories as repo
 from db.models import PlanItem, User
 
@@ -38,6 +38,39 @@ SAMPLE_DAYS = 14
 SAMPLE_DAILY_MINUTES = 90
 
 
+#: 範例 JD：自己寫的虛構職缺，不是從任何一家公司複製來的（repo 是公開的，也不放公司名稱）。
+#: 一份偏應用系統、一份偏資料，讓「哪些主題兩份都要」看得出來。
+SAMPLE_JDS: tuple[tuple[str, str], ...] = (
+    (
+        "範例：應用系統工程師",
+        """工作內容
+1. 開發與維護內部 Web 應用系統，後端使用 Python 與 SQL。
+2. 與使用者訪談需求，設計資料表與 REST API。
+3. 撰寫自動化腳本處理日誌與報表，需要大量字串處理。
+必要條件
+- 熟悉資料結構與演算法，能在時限內完成線上程式測驗。
+- 熟悉 hash table、陣列、排序等基本技巧。
+- 了解 Linux 與 Git 版本控制。
+加分條件
+- 有 Docker 或雲端部署經驗。
+- 英文讀寫流暢。""",
+    ),
+    (
+        "範例：資料平台工程師",
+        """Responsibilities
+- Build data pipelines in Python and maintain ETL jobs on Linux servers.
+- Optimize queries on large relational databases (SQL).
+- Model dependencies between jobs as a graph and schedule them with BFS/DFS-based tooling.
+Requirements
+- Solid understanding of data structures: arrays, hash maps, trees and heaps.
+- Experience with sorting large datasets and binary search on sorted data.
+- Familiar with time complexity analysis.
+Nice to have
+- Kubernetes, cloud platforms, machine learning.""",
+    ),
+)
+
+
 def is_visitor(user: User) -> bool:
     return user.email.endswith("@" + VISITOR_DOMAIN)
 
@@ -47,6 +80,8 @@ def create_visitor(session: Session, today: _dt.date) -> int:
     user = User(email=f"visitor-{uuid.uuid4().hex[:12]}@{VISITOR_DOMAIN}", display_name="訪客")
     session.add(user)
     session.flush()
+    for title, body in SAMPLE_JDS:
+        repo.save_jd(session, user.id, title, body)
     seed_sample_progress(session, user.id, today)
     return user.id
 
@@ -71,7 +106,7 @@ def seed_sample_progress(session: Session, user_id: int, today: _dt.date) -> Non
         days=SAMPLE_DAYS,
         daily_minutes=SAMPLE_DAILY_MINUTES,
         user=UserContext(levels={}, goal_topics=frozenset(goal.topics)),
-        jd=JDStats(),
+        jd=repo.load_jd_stats(session, user_id),
     )
     if not core_plan.items:
         return

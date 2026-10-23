@@ -23,7 +23,7 @@ if str(_ROOT) not in sys.path:
 from api.deps import get_current_user, show_demo_notice  # noqa: E402
 from core.goals import GOAL_PRESETS  # noqa: E402
 from core.planner import build_plan  # noqa: E402
-from core.scoring import JDStats, UserContext  # noqa: E402
+from core.scoring import UserContext  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.quota import DbLedger  # noqa: E402
 from db.session import session_scope  # noqa: E402
@@ -53,6 +53,8 @@ def main() -> None:
         topic_names = {t.id: t.name for t in topics}
         today = repo.user_today(session, get_current_user())
         focus = repo.load_focus_stages(session)
+        jd = repo.load_jd_stats(session, get_current_user())
+        citations = repo.load_jd_citations(session, get_current_user())
 
     if not tasks:
         st.error(
@@ -122,6 +124,14 @@ def main() -> None:
             ),
         )
 
+        if jd.total:
+            st.caption(
+                f"📄 會參考你貼的 {jd.total} 份 JD：越多份提到的主題排越前面（最多 ×2）。"
+                "到左邊的「職缺JD」新增或刪除。"
+            )
+        else:
+            st.caption("📄 還沒貼 JD，排序只看主題重要性與你的程度。到左邊的「職缺JD」貼上想投的職缺，排序會跟著調整。")
+
         submitted = st.form_submit_button("排出計畫", type="primary")
 
     if not submitted:
@@ -159,7 +169,7 @@ def main() -> None:
         days=int(days),
         daily_minutes=daily_minutes,
         user=UserContext(levels=levels, goal_topics=frozenset(goal.topics)),
-        jd=JDStats(),  # v0.1 沒有 JD，冷啟動就是主路徑
+        jd=jd,  # 沒貼 JD 時是空的，jd_factor 全部是 1（冷啟動）
     )
 
     if not core_plan.items:
@@ -201,10 +211,11 @@ def main() -> None:
             generated_task_ids=generated,
         )
 
-    _show_result(core_plan, topic_names, int(days), daily_minutes)
+    _show_result(core_plan, topic_names, int(days), daily_minutes, citations)
 
 
-def _show_result(core_plan, topic_names: dict[str, str], days: int, daily: int) -> None:
+def _show_result(core_plan, topic_names: dict[str, str], days: int, daily: int, citations=None) -> None:
+    citations = citations or {}
     st.success(
         f"排好了：{len(core_plan.items)} 題、共 {core_plan.total_minutes()} 分鐘。"
         "到左邊的「今日任務」開始做。"
@@ -245,6 +256,11 @@ def _show_result(core_plan, topic_names: dict[str, str], days: int, daily: int) 
                 "分數": round(s.score, 2),
                 "排進計畫": "是" if s.topic_id in scheduled_topics else "—",
                 "為什麼": s.explain(),
+                "JD 出處": (
+                    f"「{citations[s.topic_id][0][1].quote}」—{citations[s.topic_id][0][0]}"
+                    if s.topic_id in citations
+                    else ""
+                ),
             }
             for s in rows
         ],

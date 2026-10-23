@@ -18,14 +18,16 @@ from sqlalchemy.orm import Session, selectinload
 from core import clock
 from core.calibration import Sample
 from core.game_map import PlanMarks
+from core.jd_parser import MAX_JD_CHARS, JDAnalysis, Mention, analyze, jd_stats
 from core.planner import Plan as CorePlan
 from core.planner import ScheduledItem, TaskInput, TopicNode
 from core.replanner import Replan, replan
 from core.review import ItemRecord
-from core.scoring import UserContext
+from core.scoring import JDStats, UserContext
 from db.models import (
     ActiveAdventure,
     ApiUsage,
+    JobDescription,
     Plan,
     PlanItem,
     ProgressEvent,
@@ -780,6 +782,74 @@ def load_calibration_samples(session: Session, user_id: int) -> list[Sample]:
 
 
 # ---------------------------------------------------------------------------
+# 職缺描述（JD）
+# ---------------------------------------------------------------------------
+
+#: 一位使用者最多存幾份 JD。夠比較 IT 與其他職缺，也擋住有人把資料庫當網路硬碟。
+MAX_JDS_PER_USER = 30
+
+
+def save_jd(session: Session, user_id: int, title: str, body: str) -> JobDescription:
+    """存一份 JD。標題與內容去掉頭尾空白；內容超過 ``MAX_JD_CHARS`` 字的部分截掉。
+
+    Raises:
+        ValueError: 內容是空的、標題太長，或已經存滿 ``MAX_JDS_PER_USER`` 份。
+    """
+    title = title.strip() or "未命名職缺"
+    body = body.strip()
+    if not body:
+        raise ValueError("JD 內容是空的")
+    if len(title) > 120:
+        raise ValueError("標題最多 120 個字")
+    count = len(session.scalars(select(JobDescription.id).where(JobDescription.user_id == user_id)).all())
+    if count >= MAX_JDS_PER_USER:
+        raise ValueError(f"最多存 {MAX_JDS_PER_USER} 份 JD，先刪掉幾份舊的")
+    ensure_user(session, user_id)
+    jd = JobDescription(user_id=user_id, title=title, body=body[:MAX_JD_CHARS])
+    session.add(jd)
+    session.flush()
+    return jd
+
+
+def load_jds(session: Session, user_id: int) -> list[JobDescription]:
+    """這位使用者的所有 JD，新的在前。"""
+    return list(
+        session.scalars(
+            select(JobDescription)
+            .where(JobDescription.user_id == user_id)
+            .order_by(JobDescription.created_at.desc(), JobDescription.id.desc())
+        )
+    )
+
+
+def delete_jd(session: Session, user_id: int, jd_id: int) -> bool:
+    """刪一份 JD。**只刪得到自己的**：條件同時比對 ``user_id``，畫面送來別人的 id 也刪不到。"""
+    removed = session.execute(
+        delete(JobDescription).where(JobDescription.id == jd_id, JobDescription.user_id == user_id)
+    ).rowcount
+    return bool(removed)
+
+
+def load_jd_analyses(session: Session, user_id: int) -> list[tuple[JobDescription, JDAnalysis]]:
+    """每份 JD 與它的分析結果（每次從原文算，見 ``JobDescription`` 的說明）。"""
+    return [(jd, analyze(jd.body)) for jd in load_jds(session, user_id)]
+
+
+def load_jd_stats(session: Session, user_id: int) -> JDStats:
+    """評分公式要的 JD 統計。一份都沒有時是空的，``jd_factor`` 全部是 1。"""
+    return jd_stats(a for _jd, a in load_jd_analyses(session, user_id))
+
+
+def load_jd_citations(session: Session, user_id: int) -> dict[str, list[tuple[str, Mention]]]:
+    """主題 → [(JD 標題, 引用)]，任務卡與首頁顯示「出處」用。"""
+    out: dict[str, list[tuple[str, Mention]]] = {}
+    for jd, analysis in load_jd_analyses(session, user_id):
+        for topic_id, mention in analysis.topics.items():
+            out.setdefault(topic_id, []).append((jd.title, mention))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 使用者資料的匯出與刪除
 # ---------------------------------------------------------------------------
 #
@@ -790,7 +860,8 @@ def load_calibration_samples(session: Session, user_id: int) -> list[Sample]:
 #: 匯出檔的格式版本。之後欄位有增減時靠這個數字判斷怎麼讀。
 #: 2：加上 ``task_completions``（從地圖做完、不在計畫裡的題目）。
 #: 3：時間戳一律是 UTC 並標上 ``+00:00``；``user.tz`` 是使用者的時區（2026-10-23）。
-EXPORT_FORMAT_VERSION = 3
+#: 4：加上 ``jds``（使用者貼上的職缺描述原文）（2026-10-24）。
+EXPORT_FORMAT_VERSION = 4
 
 #: 帳號被刪掉後重建時用的預設值。與 ``scripts/import_data.py`` 的 SEED_USER 一致。
 _FALLBACK_EMAIL = "owner@localhost"
@@ -863,6 +934,10 @@ def export_user_data(session: Session, user_id: int) -> dict:
         .options(selectinload(TaskCompletion.task))
     ).all()
 
+    jds = session.scalars(
+        select(JobDescription).where(JobDescription.user_id == user_id).order_by(JobDescription.id)
+    ).all()
+
     return {
         "format_version": EXPORT_FORMAT_VERSION,
         "exported_at": clock.iso_utc(clock.utc_now()),
@@ -929,6 +1004,10 @@ def export_user_data(session: Session, user_id: int) -> dict:
                 "done_at": _iso(row.done_at),
             }
             for row in extra
+        ],
+        "jds": [
+            {"id": jd.id, "title": jd.title, "body": jd.body, "created_at": _iso(jd.created_at)}
+            for jd in jds
         ],
     }
 
@@ -1003,6 +1082,14 @@ def delete_user_data(
         else 0
     )
 
+    # 貼上的 JD 是使用者給的輸入，不是學習紀錄：跟額度一樣，只在刪帳號時刪。
+    # 「清除紀錄」是想重新開始練題，不該連辛苦貼的 JD 一起不見
+    deleted_jds = (
+        session.execute(delete(JobDescription).where(JobDescription.user_id == user_id)).rowcount
+        if drop_account
+        else 0
+    )
+
     # 5. users（只有明確要求時）
     deleted_users = (
         session.execute(delete(User).where(User.id == user_id)).rowcount
@@ -1018,5 +1105,6 @@ def delete_user_data(
         "task_completions": deleted_completions,
         "active_adventures": deleted_adventures,
         "api_usage": deleted_usage,
+        "jds": deleted_jds,
         "users": deleted_users,
     }

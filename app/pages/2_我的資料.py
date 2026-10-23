@@ -71,7 +71,8 @@ def _show_summary(export: dict) -> None:
     st.caption(
         f"帳號建立於 {_local_day(export['user']['created_at'], export['user'].get('tz'))}　|　"
         f"事件紀錄 {len(export['progress_events'])} 筆　|　"
-        f"地圖上計畫外完成 {len(export['task_completions'])} 題"
+        f"地圖上計畫外完成 {len(export['task_completions'])} 題　|　"
+        f"貼上的 JD {len(export['jds'])} 份"
     )
 
 
@@ -86,7 +87,7 @@ def _show_export(export: dict) -> None:
     st.subheader("帶走")
     st.write(
         "下載一份 JSON，包含所有計畫（含已收起來的）、每一項的完成狀態與實際"
-        "花費時間、以及全部的事件紀錄。題庫本身不含在內——那是網站的資料，"
+        "花費時間、全部的事件紀錄，以及貼上的 JD 原文。題庫本身不含在內——那是網站的資料，"
         "不是你的——但每一項都帶著題目標題與網址，所以這份檔案離開這個網站"
         "也讀得懂。"
     )
@@ -115,7 +116,7 @@ def _show_delete(user_id: int) -> None:
 
     with tab_clear:
         st.write(
-            "刪掉所有計畫、所有項目、所有事件紀錄，但保留帳號。"
+            "刪掉所有計畫、所有項目、所有事件紀錄，但保留帳號與貼上的 JD。"
             "等同於回到「還沒排過任何計畫」的狀態。"
         )
         _confirm_and_delete(
@@ -128,7 +129,7 @@ def _show_delete(user_id: int) -> None:
 
     with tab_drop:
         st.write(
-            "連帳號那一列一起刪掉。"
+            "連帳號那一列與貼上的 JD 一起刪掉。"
         )
         st.info(
             "目前這個版本沒有登入功能，身分固定是同一個人"

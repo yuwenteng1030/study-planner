@@ -46,6 +46,11 @@
    → **2026-10-23 完成**。`Home.py` 排好後在交易外呼叫 `explain_many`（8 條並行、單題 10 秒逾時），
    `plan_items.reason_source` 記來源，任務卡標「✨ Claude 即時生成」或「📌 預存說明」，4 個測試。AI 決定的地方見下面 I。
 
+## v0.2（2026-10-24，使用者授權 AI 直接決定）
+
+- ~~**部署成公開網址**~~ → **程式完成**：`STUDY_PLANNER_DEMO=1` 的公開展示版（每個分頁一個訪客帳號＋範例計畫與範例 JD、12 小時清理、預設不呼叫 Claude、空資料庫自動匯入題庫）。README「公開展示版（部署）」有 Streamlit Community Cloud 的步驟；**按 Deploy 要你自己登入做**。AI 決定的地方見 README 設計決策 13。
+- ~~**JD 出處引用**~~ → **完成**：`core/jd_parser.py`（關鍵字比對）、`jds` 表（migration 0005）、「職缺JD」頁、首頁排序與任務卡出處。AI 決定的地方見 README 設計決策 14，關鍵字清單（`TOPIC_PATTERNS`、`OTHER_SKILLS`）請抽查。
+
 ## 已裁定（2026-10-23，使用者授權 AI 直接決定）
 
 使用者 10/23 說「需要決策的地方你直接做決策」。以下 A–I 的裁定都是 AI 做的，
