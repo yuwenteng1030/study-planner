@@ -111,7 +111,7 @@ HR,Flipping bits,https://www.hackerrank.com/challenges/flipping-bits/problem,bit
 HR,Maximizing XOR,https://www.hackerrank.com/challenges/maximizing-xor/problem,bit_manipulation,,Easy,20,最高位不同的那一位決定答案
 HR,Sum vs XOR,https://www.hackerrank.com/challenges/sum-vs-xor/problem,bit_manipulation,,Easy,25,n 的 0 位元個數決定答案數量
 HR,Counter game,https://www.hackerrank.com/challenges/counter-game/problem,bit_manipulation,,Medium,30,x & (x-1) 消最低位的 1，數步數定勝負
-HR,Handshake,https://www.hackerrank.com/challenges/handshake/problem,math_number_theory,,Easy,10,組合數 C(n
+HR,Handshake,https://www.hackerrank.com/challenges/handshake/problem,math_number_theory,,Easy,10,"組合數 C(n,2)：n 人兩兩握手一次"
 HR,Restaurant,https://www.hackerrank.com/challenges/restaurant/problem,math_number_theory,,Easy,15,最大公因數，math.gcd 可直接用
 HR,Halloween Sale,https://www.hackerrank.com/challenges/halloween-sale/problem,math_number_theory,,Easy,20,等比遞減取整，注意下界
 HR,Sherlock and Divisors,https://www.hackerrank.com/challenges/sherlock-and-divisors/problem,math_number_theory,,Easy,20,只枚舉到 sqrt(n)，成對計入

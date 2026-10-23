@@ -292,6 +292,11 @@ def main() -> None:
 
     # 插畫在窄螢幕上字會很小，另外列一份文字版
     with st.expander("每一關的題目（文字版）"):
+        st.caption(
+            "⭐ 一星：Easy 做 3 題（沒有 Easy 就 Medium 1 題）"
+            "　⭐⭐ 二星：Medium 做一半　⭐⭐⭐ 三星：Hard 全做（沒有 Hard 就 Medium 全做）。"
+            "星等只是進度，不會鎖住後面的關卡。"
+        )
         for zone in sorted({s.zone for s in stages}):
             st.subheader(zone_theme(zone)[0])
             for level in (lv for lv in levels if lv.zone == zone and not lv.is_concept_only):
@@ -301,7 +306,10 @@ def main() -> None:
                     f"（{s.difficulty}）"
                     for s in members
                 ]
-                st.markdown(f"**{_md(level.name)}**　{sum(s.done for s in members)}/{len(members)}")
+                stars = "⭐" * level.stars + "☆" * (3 - level.stars)
+                st.markdown(
+                    f"**{_md(level.name)}**　{stars}　{sum(s.done for s in members)}/{len(members)}"
+                )
                 st.markdown("\n".join(lines))
             for level in (lv for lv in levels if lv.zone == zone and lv.is_concept_only):
                 st.caption(f"{_md(level.name)}：觀念關，沒有題目，重點寫在後面關卡的任務卡上。")

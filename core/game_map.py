@@ -1,8 +1,8 @@
 """學習地圖：把知識地圖攤成「區域 → 關卡」，並數出每一關打了幾題。
 
 一關＝一題（``build_stages``），做完就變金色；主題（``Level``）是路上的一段，
-用來分區與統計題數。不鎖關、不做星等——星等門檻是參數（提案決策 5），
-憑空選一個數字，之後多半要改。
+用來分區與統計題數。不鎖關。星等（``Level.stars``）只顯示、不擋路，門檻見
+``STAR_ONE_EASY``（提案決策 5，2026-10-23 由 AI 定為「Easy 完成 3 題」）。
 
 區域不另外存，直接從 ``topics.prereq`` 算：一個主題的區號是它到起點的
 **最長**前置鏈長度。用最長而不是最短，是因為 ``sorting`` 同時需要
@@ -16,6 +16,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from core.planner import TaskInput, TopicNode
+
+#: 一星門檻：Easy 完成幾題（題數不到就要全做完）。不用「Easy 全完成」：
+#: ``trees`` 有 7 題 Easy，全做完才一星會讓星等變成刷 Easy 的獎勵，而考卷上沒有 Easy。
+STAR_ONE_EASY = 3
 
 #: 顯示順序。題庫裡沒有其他難度；出現沒見過的難度時排在最後，不會炸。
 DIFFICULTIES: tuple[str, ...] = ("Easy", "Medium", "Hard")
@@ -41,6 +45,30 @@ class Level:
     @property
     def done_count(self) -> int:
         return sum(self.done.values())
+
+    @property
+    def stars(self) -> int:
+        """0–3 星，刻意對應考卷（兩題 Medium＋一題 Hard），不是對應題數。
+
+        - 一星：Easy 完成 ``STAR_ONE_EASY`` 題（沒有 Easy 的主題：Medium 完成 1 題）
+        - 二星：Medium 完成過半（沒有 Medium 的主題：直接跳過這一級）
+        - 三星：Hard 全完成（沒有 Hard 的主題：Medium 全完成）
+
+        每一級都要先拿到前一級。觀念關永遠 0 星。
+        """
+        if self.is_concept_only:
+            return 0
+        easy, medium, hard = (self.total.get(d, 0) for d in DIFFICULTIES)
+        d_easy, d_medium, d_hard = (self.done.get(d, 0) for d in DIFFICULTIES)
+
+        one = d_easy >= min(STAR_ONE_EASY, easy) if easy else d_medium >= 1 or d_hard >= 1
+        if not one:
+            return 0
+        two = d_medium * 2 >= medium if medium else True
+        if not two:
+            return 1
+        three = d_hard >= hard if hard else d_medium >= medium
+        return 3 if three else 2
 
     @property
     def is_concept_only(self) -> bool:
