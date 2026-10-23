@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import datetime as _dt
 import re
 import sys
 from pathlib import Path
@@ -47,7 +48,8 @@ MAP_KEY = "level_map"
 FOCUS_KEY = "map_focus"  # 小卡開在哪一關（task_id）；"next" 表示破關後跳到下一關
 CLEARED_KEY = "map_cleared"  # 剛破關的題名，給小卡說一聲「過關」
 ERROR_KEY = "map_error"
-CHEER_KEY = "map_cheer"  # 破關的鼓勵訊息，下一輪用 toast 顯示一次
+CHEER_KEY = "map_cheer"
+CLEARED_MINUTES_KEY = "map_cleared_minutes"  # 剛破關那一題計時算出來的分鐘數  # 破關的鼓勵訊息，下一輪用 toast 顯示一次
 
 # 地圖用 st.components.v2 直接放進頁面：st.html 的 DOMPurify 會把整段 SVG 濾掉，
 # st.image 又點不到。v2 元件不經過消毒，所以 SVG 裡的文字一律在 core/map_art.py
@@ -66,6 +68,7 @@ _MAP_CSS = """
   font: 13px/1.45 system-ui, sans-serif;
 }
 .card .cheer { font-weight: 700; color: #B86B00; margin-bottom: 4px; }
+.card .adv-line { font-weight: 700; color: #2F7FD1; margin: -4px 0 8px; font-variant-numeric: tabular-nums; }
 .card .title { font-weight: 700; font-size: 14px; margin-right: 18px; }
 .card .meta { opacity: .75; margin: 2px 0 8px; }
 .card .row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -95,6 +98,25 @@ export default function (component) {
 
   const send = (type, task) => setTriggerValue('action', { type, task });
 
+  // 冒險計時：秒數在瀏覽器裡即時跳，不必等 Streamlit 重跑
+  const adv = data.adventure;
+  const fmt = (ms) => {
+    const t = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  };
+  if (parentElement.__advTimer) clearInterval(parentElement.__advTimer);
+  if (adv) {
+    const tick = () => {
+      const text = `🧭 ${fmt(Date.now() - adv.started_ms)}`;
+      root.querySelectorAll('.adv-time').forEach((el) => { el.textContent = text; });
+      root.querySelectorAll('.adv-line').forEach((el) => { el.textContent = `🧭 冒險中 ${fmt(Date.now() - adv.started_ms)}`; });
+    };
+    tick();
+    parentElement.__advTimer = setInterval(tick, 1000);
+  }
+
   root.querySelectorAll('.stage').forEach((node) => {
     const task = Number(node.getAttribute('data-task'));
     // 不擋預設動作：<a target=_blank> 照常開題目，這裡只是順便開小卡
@@ -114,9 +136,11 @@ export default function (component) {
         card.appendChild(el);
         return el;
       };
-      if (focus.cleared) add('div', 'cheer', `🎉 過關：${focus.cleared}　下一關 ↓`);
+      if (focus.cleared) add('div', 'cheer', `🎉 過關：${focus.cleared}${focus.minutes ? `（${focus.minutes} 分鐘）` : ''}　下一關 ↓`);
       add('div', 'title', focus.title);
       add('div', 'meta', `${focus.topic} · ${focus.difficulty}` + (focus.done ? ' · 已完成 ✓' : ''));
+      const adventuring = adv && adv.task === focus.task && !focus.done;
+      if (adventuring) add('div', 'adv-line', '🧭 冒險中');
       const row = add('div', 'row');
       if (!focus.done) {
         if (focus.url) {
@@ -125,7 +149,10 @@ export default function (component) {
           go.href = focus.url;
           go.target = '_blank';
           go.rel = 'noopener noreferrer';
-          go.textContent = '開始做題 ↗';
+          go.textContent = adventuring ? '回到題目 ↗' : '開始冒險 ↗';
+          go.title = '在新分頁打開題目，同時開始計時';
+          // 不擋預設動作：連結照常打開題目，同時告訴伺服器開始計時
+          if (!adventuring) go.addEventListener('click', () => send('start', focus.task));
           row.appendChild(go);
         }
         const done = document.createElement('button');
@@ -133,6 +160,13 @@ export default function (component) {
         done.textContent = '我 submit 過了';
         done.onclick = () => send('done', focus.task);
         row.appendChild(done);
+        if (adventuring) {
+          const stop = document.createElement('button');
+          stop.className = 'undo';
+          stop.textContent = '放棄計時';
+          stop.onclick = () => send('cancel', focus.task);
+          row.appendChild(stop);
+        }
       } else {
         const undo = document.createElement('button');
         undo.className = 'undo';
@@ -187,10 +221,16 @@ def _mark_done(task_id: int, title: str) -> None:
     cheer = None
     try:
         with session_scope() as session:
+            adventure = repo.load_adventure(session, user_id)
+            timed = (
+                repo.adventure_minutes(adventure.started_at)
+                if adventure is not None and adventure.task_id == task_id
+                else None
+            )
             where = repo.mark_task_done_for_user(session, user_id, task_id)
             if where != "already":
                 try:
-                    cheer, quota = _cheer_inputs(session, user_id, task_id, title, where)
+                    cheer, quota = _cheer_inputs(session, user_id, task_id, title, where, timed)
                 except Exception:
                     # 鼓勵是附加的：算它出錯不能讓這個交易 rollback、把破關一起收回
                     cheer = None
@@ -199,13 +239,16 @@ def _mark_done(task_id: int, title: str) -> None:
         return
     st.session_state[FOCUS_KEY] = "next"
     st.session_state[CLEARED_KEY] = title
+    st.session_state[CLEARED_MINUTES_KEY] = timed
     if cheer is not None:
         # 交易已經 commit 才問 Claude：等網路時不能抓著 SQLite 的寫入鎖
         message = encourage(cheer, template_message(cheer), user_id=user_id, quota=quota)
         st.session_state[CHEER_KEY] = toast_text(message.text) + ("　✨ Claude" if message.is_generated else "")
 
 
-def _cheer_inputs(session, user_id: int, task_id: int, title: str, where: str) -> tuple[Cheer, int]:
+def _cheer_inputs(
+    session, user_id: int, task_id: int, title: str, where: str, actual_minutes: int | None = None
+) -> tuple[Cheer, int]:
     """破關的鼓勵訊息要的資料。題目在今天的計畫裡就帶上今天的進度。"""
     # 從資料庫查，不靠 session_state：callback 可能比 main() 先跑（例如伺服器剛重開）
     _, topic_name, difficulty, est = repo.load_task_brief(session, task_id) or (title, "", "", None)
@@ -218,9 +261,25 @@ def _cheer_inputs(session, user_id: int, task_id: int, title: str, where: str) -
             today_done, today_total = summary["today_done"], summary["today_total"]
     cheer = Cheer(
         title=title, topic_name=topic_name, difficulty=difficulty, est_minutes=est,
+        actual_minutes=actual_minutes,
         today_done=today_done, today_total=today_total,
     )
     return cheer, repo.ensure_user(session, user_id).daily_api_quota
+
+
+def _start_adventure(task_id: int) -> None:
+    try:
+        with session_scope() as session:
+            repo.start_adventure(session, get_current_user(), task_id)
+    except LookupError:
+        st.session_state[ERROR_KEY] = "找不到這一題，可能題庫剛更新過。重新整理再試一次。"
+        return
+    st.session_state[FOCUS_KEY] = task_id
+
+
+def _cancel_adventure() -> None:
+    with session_scope() as session:
+        repo.cancel_adventure(session, get_current_user())
 
 
 def _mark_undone(task_id: int) -> None:
@@ -247,6 +306,10 @@ def _on_map_action() -> None:
         _mark_done(task, titles.get(task, ""))
     elif kind == "undo":
         _mark_undone(task)
+    elif kind == "start":
+        _start_adventure(task)
+    elif kind == "cancel":
+        _cancel_adventure()
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +336,8 @@ def main() -> None:
         replanned = repo.ensure_replanned(session, plan, today) if plan is not None else None
         marks = repo.plan_marks(plan, today)
         focus_stages = repo.load_focus_stages(session)
+        adventure = repo.load_adventure(session, get_current_user())
+        adventure = (adventure.task_id, adventure.started_at) if adventure is not None else None
 
     if not tasks:
         st.info("還沒有題庫。先執行 `python -m scripts.import_data` 匯入題庫。")
@@ -330,7 +395,11 @@ def main() -> None:
         st.session_state[FOCUS_KEY] = focus_id
     focus = by_id.get(focus_id) if isinstance(focus_id, int) else None
 
-    _render_next_panel(here, urls, all_done=done == len(stages), today=here_is_today)
+    titles_all = {s.task_id: s.title for s in all_stages}
+    if adventure is not None and adventure[0] in titles_all:
+        _render_adventure_panel(adventure, titles_all[adventure[0]], urls)
+    else:
+        _render_next_panel(here, urls, all_done=done == len(stages), today=here_is_today)
     if marks.today or marks.overdue:
         # 用整個題庫算：重點路線只畫一部分，用畫出來的關卡算會少數今天的任務
         all_by_id = {s.task_id: s for s in all_stages}
@@ -354,7 +423,9 @@ def main() -> None:
                 by_topic=not focus_only,
                 # 重點路線不高，傾斜起來像桌遊盤面；整個題庫很長，傾斜會讓上面幾區縮得太小
                 tilt=focus_only,
+                adventure_id=adventure[0] if adventure else None,
             ),
+            "adventure": _adventure_payload(adventure),
             "here": here.task_id if here else None,
             "focus": _focus_payload(focus, urls) if focus else None,
         },
@@ -417,6 +488,7 @@ def _focus_payload(stage: Stage, urls: dict[int, str]) -> dict:
         "url": safe_url(urls.get(stage.task_id)),
         # 最後一關做完時小熊停在終點（已完成），照樣要說一聲過關
         "cleared": cleared,
+        "minutes": st.session_state.pop(CLEARED_MINUTES_KEY, None) if cleared else None,
     }
 
 
@@ -428,6 +500,36 @@ def _render_hud(all_stages: list[Stage], done: int, total: int, focus_only: bool
     mid.metric("經驗值", f"{exp.xp} XP")
     right.metric("重點路線" if focus_only else "全部關卡", f"{done} / {total}")
     st.progress(exp.ratio, text=f"再 {exp.per_level - exp.into_level} XP 升到 Lv. {exp.level + 1}")
+
+
+def _adventure_payload(adventure) -> dict | None:
+    """給地圖的 JavaScript：哪一題在冒險、從什麼時候開始（毫秒，UTC），秒數在瀏覽器裡即時跳。"""
+    if adventure is None:
+        return None
+    task_id, started_at = adventure
+    started = started_at.replace(tzinfo=_dt.timezone.utc)
+    return {"task": task_id, "started_ms": int(started.timestamp() * 1000)}
+
+
+def _render_adventure_panel(adventure, title: str, urls: dict[int, str]) -> None:
+    """正在冒險時，上方面板換成冒險狀態：題目、已經多久、回到題目、完成、放棄。"""
+    task_id, started_at = adventure
+    minutes = repo.adventure_minutes(started_at)
+    with st.container(border=True):
+        st.markdown(f"🧭 **冒險中**：{_md(title)}")
+        st.caption(
+            f"已經 {minutes} 分鐘（地圖上的計時每秒更新）。按「我 submit 過了」時，"
+            "經過的時間會自動記成實際分鐘數。"
+        )
+        left, mid, right = st.columns(3)
+        url = safe_url(urls.get(task_id))
+        if url:
+            left.link_button("回到題目 ↗", url, width="stretch")
+        mid.button(
+            "我 submit 過了", key=f"done_adv_{task_id}", type="primary", width="stretch",
+            on_click=_mark_done, args=(task_id, title),
+        )
+        right.button("放棄計時", key=f"cancel_adv_{task_id}", width="stretch", on_click=_cancel_adventure)
 
 
 def _render_next_panel(
@@ -444,9 +546,12 @@ def _render_next_panel(
         st.markdown(f"🐻 **{label}**：{_md(here.title)}")
         st.caption(f"{_md(here.topic_name)} · {here.difficulty}")
         left, right = st.columns(2)
-        url = safe_url(urls.get(here.task_id))
-        if url:
-            left.link_button("開始做題 ↗", url, width="stretch")
+        # 開始冒險＝開始計時；按下去之後面板會出現「回到題目 ↗」連結
+        # （Streamlit 的連結按鈕不能同時觸發計時，地圖上的小卡可以一鍵完成兩件事）
+        left.button(
+            "⏱ 開始冒險（計時）", key=f"start_{here.task_id}", width="stretch",
+            on_click=_start_adventure, args=(here.task_id,),
+        )
         right.button(
             "我 submit 過了",
             key=f"done_{here.task_id}",

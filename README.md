@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，308 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，318 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -195,7 +195,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 308 個測試
+pytest -q                          # 318 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
@@ -235,6 +235,7 @@ streamlit run app/Home.py
 | `tests/test_daily_replan.py` | 每天只重排一次：同一天第二次不寫入、隔天會再檢查、另一個分頁先搶到就不重排 |
 | `tests/test_quota_db.py` | 額度存資料庫：重開不歸零、退回沒用到的次數、不同用途分開算 |
 | `tests/test_game_map.py`（續） | 重點路線依階段分區、經驗值（Easy 10／Medium 25／Hard 50）、重點題組 30 題且 Medium 過半 |
+| `tests/test_adventure.py` | 冒險計時：分鐘無條件進位且有上限、同一題重按不重新計時、換題重新計時、打勾自動記分鐘（自己填的優先）、地圖計畫外完成也記分鐘並算進估時校正、刪帳號一併刪除 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
 UI 冒煙測試不是裝飾：`pytest` 全綠、伺服器回 200、log 乾淨的情況下，打勾功能曾經是一個無窮迴圈——`st.rerun()` 用拋例外實作，而那個例外會讓外層的交易 rollback，於是每次重跑都再標記一次。只有真的去點那個 checkbox 才會發現。

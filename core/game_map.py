@@ -231,7 +231,7 @@ def bear_stage(stages: list[Stage], marks: PlanMarks) -> Stage | None:
 
 
 #: 地圖元件會送回來的事件種類。
-MAP_ACTIONS: frozenset[str] = frozenset({"pick", "close", "done", "undo"})
+MAP_ACTIONS: frozenset[str] = frozenset({"pick", "close", "done", "undo", "start", "cancel"})
 
 
 def parse_map_action(action: object, known_ids: Iterable[int]) -> tuple[str, int] | None:

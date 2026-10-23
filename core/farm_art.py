@@ -209,3 +209,196 @@ def scenery_piece(kind: int, x: float, y: float) -> str:
     if k == 4:
         return field(x, y, kind=1)
     return house(x, y + 8, variant=kind) + flowers(x - 26, y + 4, seed=kind) + bush(x + 24, y + 6)
+
+
+# ---------------------------------------------------------------------------
+# 關卡地標：每一關是一座浮空小島，上面放一個小建築（依主題換造型）
+# ---------------------------------------------------------------------------
+
+STONE = "#C9C2B5"
+STONE_DARK = "#9A9286"
+CLIFF = "#A8774A"
+CLIFF_DARK = "#7E5634"
+
+
+def island(x: float, y: float, rx: float = 26, ry: float = 12, top: str = GRASS_LIGHT) -> str:
+    """浮空小島：上面是草地橢圓，下面是一圈土壤懸崖（越往下越窄），底下有影子。"""
+    depth = 11
+    return (
+        shadow(x + 5, y + depth + 12, rx * 0.9, ry * 0.55, 0.2)
+        # 懸崖：一個往下收的形狀，左邊受光、右邊背光
+        + f'<path d="M{x - rx:.1f},{y:.1f} Q{x - rx * 0.8:.1f},{y + depth + 6:.1f} {x:.1f},{y + depth + 9:.1f} '
+        f'Q{x + rx * 0.8:.1f},{y + depth + 6:.1f} {x + rx:.1f},{y:.1f} Z" fill="{CLIFF}"/>'
+        + f'<path d="M{x:.1f},{y + depth + 9:.1f} Q{x + rx * 0.8:.1f},{y + depth + 6:.1f} {x + rx:.1f},{y:.1f} '
+        f'L{x + rx * 0.2:.1f},{y + 2:.1f} Z" fill="{CLIFF_DARK}" opacity="0.6"/>'
+        + f'<ellipse cx="{x:.1f}" cy="{y:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" fill="{top}" '
+        f'stroke="{GRASS_DARK}" stroke-width="1.5"/>'
+        + f'<ellipse cx="{x - rx * 0.25:.1f}" cy="{y - ry * 0.3:.1f}" rx="{rx * 0.55:.1f}" ry="{ry * 0.45:.1f}" '
+        f'fill="#FFFFFF" opacity="0.18"/>'
+    )
+
+
+def _windmill(x: float, y: float) -> str:
+    return (
+        f'<polygon points="{x - 7},{y} {x + 7},{y} {x + 4},{y - 22} {x - 4},{y - 22}" fill="{WALL}"/>'
+        f'<polygon points="{x + 1},{y} {x + 7},{y} {x + 4},{y - 22} {x + 1},{y - 22}" fill="#D8C59D"/>'
+        f'<polygon points="{x - 6},{y - 22} {x + 6},{y - 22} {x},{y - 29}" fill="#C0533C"/>'
+        f'<rect x="{x - 2}" y="{y - 6}" width="4" height="6" fill="{WOOD_DARK}"/>'
+        f'<g stroke="{WOOD_DARK}" stroke-width="2.4" stroke-linecap="round">'
+        f'<line x1="{x - 11}" y1="{y - 33}" x2="{x + 11}" y2="{y - 13}"/>'
+        f'<line x1="{x + 11}" y1="{y - 33}" x2="{x - 11}" y2="{y - 13}"/></g>'
+        f'<circle cx="{x}" cy="{y - 23}" r="2" fill="{WOOD_DARK}"/>'
+    )
+
+
+def _well(x: float, y: float) -> str:
+    return (
+        f'<ellipse cx="{x}" cy="{y - 2}" rx="9" ry="4" fill="{STONE_DARK}"/>'
+        f'<rect x="{x - 9}" y="{y - 10}" width="18" height="8" fill="{STONE}"/>'
+        f'<rect x="{x + 1}" y="{y - 10}" width="8" height="8" fill="{STONE_DARK}" opacity="0.5"/>'
+        f'<ellipse cx="{x}" cy="{y - 10}" rx="9" ry="4" fill="{WATER}"/>'
+        f'<rect x="{x - 9}" y="{y - 24}" width="2" height="14" fill="{WOOD_DARK}"/>'
+        f'<rect x="{x + 7}" y="{y - 24}" width="2" height="14" fill="{WOOD_DARK}"/>'
+        f'<polygon points="{x - 12},{y - 22} {x + 12},{y - 22} {x},{y - 30}" fill="#B8513A"/>'
+        f'<polygon points="{x},{y - 30} {x + 12},{y - 22} {x},{y - 22}" fill="#8F3D2B"/>'
+    )
+
+
+def _barn(x: float, y: float) -> str:
+    return (
+        f'<rect x="{x - 11}" y="{y - 14}" width="22" height="14" fill="#C8473A"/>'
+        f'<rect x="{x + 2}" y="{y - 14}" width="9" height="14" fill="#9E3529"/>'
+        f'<polygon points="{x - 13},{y - 14} {x + 13},{y - 14} {x},{y - 25}" fill="#7A3B2C"/>'
+        f'<polygon points="{x},{y - 25} {x + 13},{y - 14} {x},{y - 14}" fill="#5E2C20"/>'
+        f'<rect x="{x - 4}" y="{y - 9}" width="8" height="9" fill="{WALL}"/>'
+        f'<path d="M{x - 4},{y - 9} L{x + 4},{y} M{x + 4},{y - 9} L{x - 4},{y}" stroke="#C8473A" stroke-width="1.2"/>'
+    )
+
+
+def _tent(x: float, y: float) -> str:
+    return (
+        f'<polygon points="{x - 13},{y} {x},{y - 22} {x + 13},{y}" fill="#E9B44C"/>'
+        f'<polygon points="{x},{y - 22} {x + 13},{y} {x + 2},{y}" fill="#C88F2E"/>'
+        f'<polygon points="{x - 4},{y} {x},{y - 10} {x + 4},{y}" fill="{WOOD_DARK}"/>'
+        f'<line x1="{x}" y1="{y - 22}" x2="{x}" y2="{y - 28}" stroke="{WOOD_DARK}" stroke-width="1.5"/>'
+        f'<polygon points="{x},{y - 28} {x + 7},{y - 26} {x},{y - 24}" fill="#D9573F"/>'
+    )
+
+
+def _observatory(x: float, y: float) -> str:
+    return (
+        f'<rect x="{x - 9}" y="{y - 16}" width="18" height="16" fill="{STONE}"/>'
+        f'<rect x="{x + 1}" y="{y - 16}" width="8" height="16" fill="{STONE_DARK}" opacity="0.6"/>'
+        f'<path d="M{x - 11},{y - 16} A11,11 0 0 1 {x + 11},{y - 16} Z" fill="#4F86C6"/>'
+        f'<path d="M{x},{y - 27} A11,11 0 0 1 {x + 11},{y - 16} L{x},{y - 16} Z" fill="#356196"/>'
+        f'<rect x="{x - 1.5}" y="{y - 26}" width="3" height="9" fill="#BFD7EF"/>'
+        f'<rect x="{x - 3}" y="{y - 7}" width="6" height="7" fill="{WOOD_DARK}"/>'
+    )
+
+
+def _haystack(x: float, y: float) -> str:
+    return (
+        f'<ellipse cx="{x - 5}" cy="{y - 7}" rx="10" ry="9" fill="{WHEAT}"/>'
+        f'<ellipse cx="{x + 6}" cy="{y - 5}" rx="8" ry="7" fill="{WHEAT_DARK}"/>'
+        f'<ellipse cx="{x - 8}" cy="{y - 11}" rx="4" ry="3" fill="#F6DC86"/>'
+        f'<path d="M{x - 12},{y - 6} l4 -2 M{x - 4},{y - 12} l3 -3 M{x + 4},{y - 7} l3 -2" stroke="{WHEAT_DARK}" stroke-width="1"/>'
+    )
+
+
+def _mushroom_house(x: float, y: float) -> str:
+    return (
+        f'<rect x="{x - 6}" y="{y - 12}" width="12" height="12" fill="{WALL}" rx="2"/>'
+        f'<rect x="{x}" y="{y - 12}" width="6" height="12" fill="#D8C59D" rx="2"/>'
+        f'<path d="M{x - 14},{y - 12} Q{x},{y - 34} {x + 14},{y - 12} Z" fill="#D9473C"/>'
+        f'<path d="M{x},{y - 23} Q{x + 9},{y - 22} {x + 14},{y - 12} L{x},{y - 12} Z" fill="#A9352C"/>'
+        f'<circle cx="{x - 6}" cy="{y - 18}" r="2.2" fill="#FFFFFF"/><circle cx="{x + 3}" cy="{y - 22}" r="1.8" fill="#FFFFFF"/>'
+        f'<rect x="{x - 2}" y="{y - 7}" width="4" height="7" fill="{WOOD_DARK}" rx="1.5"/>'
+    )
+
+
+def _signpost(x: float, y: float) -> str:
+    return (
+        f'<rect x="{x - 1.5}" y="{y - 26}" width="3" height="26" fill="{WOOD_DARK}"/>'
+        f'<polygon points="{x - 2},{y - 25} {x + 13},{y - 25} {x + 17},{y - 21} {x + 13},{y - 17} {x - 2},{y - 17}" fill="{WOOD}"/>'
+        f'<polygon points="{x + 2},{y - 15} {x - 13},{y - 15} {x - 17},{y - 11} {x - 13},{y - 7} {x + 2},{y - 7}" fill="#B88550"/>'
+    )
+
+
+def _campfire(x: float, y: float) -> str:
+    return (
+        f'<g stroke="{WOOD_DARK}" stroke-width="3" stroke-linecap="round">'
+        f'<line x1="{x - 8}" y1="{y - 1}" x2="{x + 8}" y2="{y - 5}"/><line x1="{x - 8}" y1="{y - 5}" x2="{x + 8}" y2="{y - 1}"/></g>'
+        f'<path d="M{x - 6},{y - 4} Q{x - 7},{y - 14} {x},{y - 22} Q{x + 7},{y - 14} {x + 6},{y - 4} Z" fill="#F08A2E"/>'
+        f'<path d="M{x - 3},{y - 4} Q{x - 3},{y - 11} {x},{y - 15} Q{x + 3},{y - 11} {x + 3},{y - 4} Z" fill="#FFD34E"/>'
+        f'<circle cx="{x + 9}" cy="{y - 6}" r="3" fill="{STONE}"/><circle cx="{x - 10}" cy="{y - 4}" r="2.5" fill="{STONE_DARK}"/>'
+    )
+
+
+def _lighthouse(x: float, y: float) -> str:
+    return (
+        f'<polygon points="{x - 7},{y} {x + 7},{y} {x + 4},{y - 24} {x - 4},{y - 24}" fill="#FFFFFF"/>'
+        f'<polygon points="{x - 6.3},{y - 5} {x + 6.3},{y - 5} {x + 5.6},{y - 10} {x - 5.6},{y - 10}" fill="#D9473C"/>'
+        f'<polygon points="{x - 4.9},{y - 15} {x + 4.9},{y - 15} {x + 4.4},{y - 19} {x - 4.4},{y - 19}" fill="#D9473C"/>'
+        f'<polygon points="{x + 1},{y} {x + 7},{y} {x + 4},{y - 24} {x + 1},{y - 24}" fill="#000" opacity="0.12"/>'
+        f'<rect x="{x - 4}" y="{y - 29}" width="8" height="5" fill="#FFE27A"/>'
+        f'<polygon points="{x - 5},{y - 29} {x + 5},{y - 29} {x},{y - 34}" fill="#D9473C"/>'
+    )
+
+
+def _castle(x: float, y: float) -> str:
+    """Boss 關：兩座塔的小城堡，紅旗。"""
+    c = STONE
+    d = STONE_DARK
+    return (
+        f'<rect x="{x - 12}" y="{y - 18}" width="24" height="18" fill="{c}"/>'
+        f'<rect x="{x + 2}" y="{y - 18}" width="10" height="18" fill="{d}" opacity="0.6"/>'
+        f'<rect x="{x - 16}" y="{y - 26}" width="8" height="26" fill="{c}"/>'
+        f'<rect x="{x + 8}" y="{y - 26}" width="8" height="26" fill="{d}"/>'
+        + "".join(
+            f'<rect x="{bx}" y="{y - 29}" width="2.5" height="3" fill="{c if bx < x else d}"/>'
+            for bx in (x - 16, x - 12.5, x - 10.5, x + 8, x + 11.5, x + 13.5)
+        )
+        + f'<path d="M{x - 4},{y} L{x - 4},{y - 8} A4,4 0 0 1 {x + 4},{y - 8} L{x + 4},{y} Z" fill="{WOOD_DARK}"/>'
+        f'<line x1="{x - 12}" y1="{y - 26}" x2="{x - 12}" y2="{y - 37}" stroke="{WOOD_DARK}" stroke-width="1.5"/>'
+        f'<polygon points="{x - 12},{y - 37} {x - 3},{y - 34} {x - 12},{y - 31}" fill="#D9473C"/>'
+    )
+
+
+#: 主題 → 地標。同一個主題的關卡長得一樣，看得出「這一段在練什麼」。
+_LANDMARKS = {
+    "windmill": _windmill, "well": _well, "barn": _barn, "tent": _tent,
+    "observatory": _observatory, "haystack": _haystack, "mushroom": _mushroom_house,
+    "signpost": _signpost, "campfire": _campfire, "lighthouse": _lighthouse,
+}
+TOPIC_LANDMARK = {
+    "python_basic": "tent", "arrays": "barn", "strings": "windmill", "hashmaps": "well",
+    "sorting": "haystack", "search": "lighthouse", "greedy": "campfire",
+    "stacks_queues": "mushroom", "linked_lists": "signpost", "recursion": "observatory",
+    "trees": "mushroom", "graphs": "signpost", "heaps": "haystack", "dp_1d": "observatory",
+    "dp_2d": "lighthouse", "two_d_arrays": "barn", "bit_manipulation": "well",
+    "math_number_theory": "windmill", "tries": "tent", "misc": "campfire",
+}
+
+
+def landmark_kind(topic_id: str) -> str:
+    """主題對應的地標；沒列到的主題依名字固定挑一個（每次都一樣）。"""
+    if topic_id in TOPIC_LANDMARK:
+        return TOPIC_LANDMARK[topic_id]
+    names = sorted(_LANDMARKS)
+    return names[sum(map(ord, topic_id)) % len(names)]
+
+
+def landmark(kind: str, x: float, y: float, *, boss: bool = False) -> str:
+    """畫在小島上的地標，``(x, y)`` 是地標的底部中心。Boss 關一律是城堡。"""
+    draw = _castle if boss else _LANDMARKS.get(kind, _tent)
+    # 以底部中心放大 1.3 倍：地圖縮在畫面上時，原尺寸的小建築太小看不清楚
+    return (
+        f'<g class="landmark" transform="translate({x:.1f},{y:.1f}) scale({LANDMARK_SCALE}) '
+        f'translate({-x:.1f},{-y:.1f})">{draw(x, y)}</g>'
+    )
+
+
+#: 地標放大倍率（以底部中心）
+LANDMARK_SCALE = 1.3
+#: 最高的地標（城堡含旗子）從底部往上的高度，放大前
+LANDMARK_MAX_HEIGHT = 37

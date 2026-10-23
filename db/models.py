@@ -365,6 +365,9 @@ class TaskCompletion(Base):
         DateTime, nullable=False, server_default=func.now()
     )
 
+    #: 冒險計時算出來的實際分鐘數（從地圖開始做題到按「我 submit 過了」）；沒計時是 NULL。
+    actual_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     task: Mapped["Task"] = relationship()
 
     __table_args__ = (
@@ -388,3 +391,19 @@ class ApiUsage(Base):
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (CheckConstraint("count >= 0", name="ck_api_usage_count"),)
+
+
+class ActiveAdventure(Base):
+    """正在進行的「冒險」：使用者從地圖按了開始做題，計時中。每位使用者同時只有一場。
+
+    按「我 submit 過了」時，經過的分鐘數就是實際花的時間，自動記下來、這一列刪掉。
+    存資料庫而不是 session_state：做題時會切到 HackerRank 的分頁，回來時 Streamlit
+    可能已經換了一個 session（重新整理、伺服器重開），計時不能因此不見。
+    """
+
+    __tablename__ = "active_adventures"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True)
+    task_id: Mapped[int] = mapped_column(Integer, ForeignKey("tasks.id"), nullable=False)
+    #: 開始的時間（UTC）
+    started_at: Mapped[_dt.datetime] = mapped_column(DateTime, nullable=False)

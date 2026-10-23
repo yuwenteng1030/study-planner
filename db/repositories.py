@@ -23,7 +23,17 @@ from core.planner import ScheduledItem, TaskInput, TopicNode
 from core.replanner import Replan, replan
 from core.review import ItemRecord
 from core.scoring import UserContext
-from db.models import Plan, PlanItem, ProgressEvent, Task, TaskCompletion, Topic, User
+from db.models import (
+    ActiveAdventure,
+    ApiUsage,
+    Plan,
+    PlanItem,
+    ProgressEvent,
+    Task,
+    TaskCompletion,
+    Topic,
+    User,
+)
 
 #: ``parsed_goal`` JSON 裡放自評程度的鍵。
 #:
@@ -340,6 +350,10 @@ def mark_item_done(
     """
     item.status = "done"
     item.done_at = clock.utc_now()
+    # 這一題正在冒險：結束計時。使用者自己填了分鐘數就以他填的為準，沒填才用計時的
+    timed = take_adventure_minutes(session, item.plan.user_id, item.task_id)
+    if actual_minutes is None:
+        actual_minutes = timed
     if actual_minutes is not None:
         item.actual_minutes = actual_minutes
     _record(session, item.plan, "done", item_id=item.id,
@@ -351,6 +365,58 @@ def mark_item_undone(session: Session, item: PlanItem) -> None:
     item.status = "todo"
     item.done_at = None
     _record(session, item.plan, "undo", item_id=item.id)
+
+
+# ---------------------------------------------------------------------------
+# 冒險計時
+# ---------------------------------------------------------------------------
+
+#: 計時算出來的分鐘數上限：超過 10 小時多半是忘了按完成，就當 10 小時記，不要記一個天文數字
+ADVENTURE_MAX_MINUTES = 600
+
+
+def start_adventure(session: Session, user_id: int, task_id: int) -> None:
+    """開始冒險（計時）。同時只有一場：已經在冒險別的題目，就換成這一題、重新計時。"""
+    if session.get(Task, task_id) is None:
+        raise LookupError(f"task_id={task_id} 不存在")
+    ensure_user(session, user_id)
+    row = session.get(ActiveAdventure, user_id)
+    if row is None:
+        session.add(ActiveAdventure(user_id=user_id, task_id=task_id, started_at=clock.utc_now()))
+    elif row.task_id != task_id:
+        row.task_id = task_id
+        row.started_at = clock.utc_now()
+    # 同一題再按一次「開始」：不重新計時（例如不小心又點了一次題目連結）
+
+
+def load_adventure(session: Session, user_id: int) -> ActiveAdventure | None:
+    return session.get(ActiveAdventure, user_id)
+
+
+def cancel_adventure(session: Session, user_id: int) -> None:
+    row = session.get(ActiveAdventure, user_id)
+    if row is not None:
+        session.delete(row)
+        session.flush()  # 同一個交易裡接著讀，要看得到「已經沒有冒險」
+
+
+def adventure_minutes(started_at: _dt.datetime, now: _dt.datetime | None = None) -> int:
+    """經過幾分鐘（無條件進位，至少 1，最多 ``ADVENTURE_MAX_MINUTES``）。"""
+    import math
+
+    seconds = ((now or clock.utc_now()) - started_at).total_seconds()
+    return max(1, min(ADVENTURE_MAX_MINUTES, math.ceil(seconds / 60)))
+
+
+def take_adventure_minutes(session: Session, user_id: int, task_id: int) -> int | None:
+    """這一題正在冒險的話：結束冒險，回傳經過的分鐘數；不是這一題就不動、回傳 ``None``。"""
+    row = session.get(ActiveAdventure, user_id)
+    if row is None or row.task_id != task_id:
+        return None
+    minutes = adventure_minutes(row.started_at)
+    session.delete(row)
+    session.flush()
+    return minutes
 
 
 def mark_task_done_for_user(session: Session, user_id: int, task_id: int) -> str:
@@ -375,12 +441,14 @@ def mark_task_done_for_user(session: Session, user_id: int, task_id: int) -> str
             (i for i in plan.items if i.task_id == task_id and i.status == "todo"), None
         )
     if item is not None:
-        mark_item_done(session, item)
+        mark_item_done(session, item)  # 冒險計時在 mark_item_done 裡結算
         return "plan"
 
     if task_id in load_completed_task_ids_for_user(session, user_id):
+        take_adventure_minutes(session, user_id, task_id)  # 做過的題目也要把計時收掉
         return "already"
-    session.add(TaskCompletion(user_id=user_id, task_id=task_id))
+    minutes = take_adventure_minutes(session, user_id, task_id)
+    session.add(TaskCompletion(user_id=user_id, task_id=task_id, actual_minutes=minutes))
     return "extra"
 
 
@@ -690,10 +758,24 @@ def load_calibration_samples(session: Session, user_id: int) -> list[Sample]:
         .join(Task, PlanItem.task_id == Task.id)
         .where(Plan.user_id == user_id, PlanItem.status == "done")
     )
-    return [
+    samples = [
         Sample(task_id=t, difficulty=d, est_minutes=e, actual_minutes=a, done_at=at)
         for t, d, e, a, at in rows
     ]
+    # 地圖上做完、有冒險計時的題目也算（2026-10-23 起才有 actual_minutes）
+    extra = session.execute(
+        select(
+            TaskCompletion.task_id, Task.difficulty, Task.est_minutes,
+            TaskCompletion.actual_minutes, TaskCompletion.done_at,
+        )
+        .join(Task, TaskCompletion.task_id == Task.id)
+        .where(TaskCompletion.user_id == user_id)
+    )
+    samples += [
+        Sample(task_id=t, difficulty=d, est_minutes=e, actual_minutes=a, done_at=at)
+        for t, d, e, a, at in extra
+    ]
+    return samples
 
 
 # ---------------------------------------------------------------------------
@@ -908,6 +990,12 @@ def delete_user_data(
         delete(TaskCompletion).where(TaskCompletion.user_id == user_id)
     ).rowcount
 
+    # 4b. 冒險計時與 API 額度：也都指向 users
+    deleted_adventures = session.execute(
+        delete(ActiveAdventure).where(ActiveAdventure.user_id == user_id)
+    ).rowcount
+    deleted_usage = session.execute(delete(ApiUsage).where(ApiUsage.user_id == user_id)).rowcount
+
     # 5. users（只有明確要求時）
     deleted_users = (
         session.execute(delete(User).where(User.id == user_id)).rowcount
@@ -921,5 +1009,7 @@ def delete_user_data(
         "plan_items": deleted_items,
         "plans": deleted_plans,
         "task_completions": deleted_completions,
+        "active_adventures": deleted_adventures,
+        "api_usage": deleted_usage,
         "users": deleted_users,
     }

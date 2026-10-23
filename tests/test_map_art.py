@@ -345,3 +345,22 @@ def test_filler_scenery_keeps_clear_of_road_nodes_and_headers(topics, tasks) -> 
         for x, y in spots:
             assert min(((x - a) ** 2 + (y - b) ** 2) ** 0.5 for a, b in road) >= ROAD_CLEARANCE
             assert all(((x - p.x) ** 2 + (y - p.y) ** 2) ** 0.5 >= NODE_CLEARANCE for p in placed)
+
+
+def test_tallest_landmark_stays_below_the_plaque_of_the_row_above() -> None:
+    """地標底部在關卡中心下方 6、往上長 LANDMARK_MAX_HEIGHT×倍率；上一排的編號小牌底在它中心下方 27。"""
+    from core.farm_art import LANDMARK_MAX_HEIGHT, LANDMARK_SCALE
+    from core.map_art import ROW_HEIGHT
+
+    landmark_top = 6 - LANDMARK_MAX_HEIGHT * LANDMARK_SCALE  # 相對於關卡中心
+    plaque_bottom_above = -ROW_HEIGHT + 27
+    assert landmark_top > plaque_bottom_above
+
+
+def test_every_landmark_kind_draws_and_topics_map_to_one() -> None:
+    from core import farm_art
+
+    for kind in farm_art._LANDMARKS:
+        assert "<g class=\"landmark\"" in farm_art.landmark(kind, 100, 100)
+    assert farm_art.landmark_kind("arrays") == "barn"
+    assert farm_art.landmark_kind("some_new_topic") in farm_art._LANDMARKS

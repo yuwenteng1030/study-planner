@@ -51,7 +51,7 @@ PER_ROW = 5
 COLUMNS: tuple[float, ...] = (200, 300, 400, 500, 600)
 #: 重點路線沒有左欄的主題名，關卡往左展開用滿寬度
 FOCUS_COLUMNS: tuple[float, ...] = (110, 232, 354, 476, 598)
-ROW_HEIGHT = 62
+ROW_HEIGHT = 72  # 小島＋地標（放大 1.3 倍）最高到中心上方約 42，排距要讓它碰不到上一排的編號小牌
 BAND_HEADER = 46  # 色帶上方放區名的高度
 NODE_R = 17
 BEAR_OFFSET = 50  # 小熊離關卡中心的距離：剛好是兩欄中間
@@ -381,19 +381,23 @@ OVERDUE_RING = "#D9534F"
 
 
 def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
-          level: int = 0, focus: bool = False) -> str:
+          level: int = 0, focus: bool = False, adventuring: bool = False) -> str:
+    """一關＝一座浮空小島：島上的地標依主題換造型（Boss 關是城堡），關卡編號寫在島前的小牌上。"""
     s = p.stage
     x, y = p.x, p.y
     letter, color = DIFFICULTY_MARK.get(s.difficulty, ("?", INK))
     boss = s.difficulty == "Hard"
-    r = NODE_R + (BOSS_EXTRA if boss else 0)
     status = "已完成" if s.done else "未完成"
     when = {"today": "，今天的任務", "overdue": "，過期還沒做"}.get(plan_tag, "")
-    tip = f"第 {level} 關：{s.title}（{s.difficulty}{'・Boss' if boss else ''}，{status}{when}）"
+    tip = (
+        f"第 {level} 關：{s.title}（{s.difficulty}{'・Boss' if boss else ''}，{status}{when}"
+        f"{'，冒險中' if adventuring else ''}）"
+    )
 
     classes = (
         "stage" + (" done" if s.done else "") + (" here" if is_here else "")
-        + (" boss" if boss else "") + (f" {plan_tag}" if plan_tag else "")
+        + (" boss" if boss else "") + (" adventuring" if adventuring else "")
+        + (f" {plan_tag}" if plan_tag else "")
     )
     # 有網址就是真的 <a>：就算畫面的 JavaScript 沒跑起來，點下去照樣能開題目
     href = (
@@ -402,43 +406,55 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
         else ""
     )
     tag = "a" if url else "g"
+    rx = 27 if boss else 24
+    iy = y + 4  # 小島草地的中心
     parts = [
         f'<{tag} class="{classes}" data-task="{int(s.task_id)}" data-difficulty="{letter}"{href}>',
         f"<title>{escape(tip)}</title>",
-        # 影子落在圓台底下偏右下
-        f'<ellipse cx="{x + 3:.1f}" cy="{y + DEPTH + 6:.1f}" rx="{r + 3}" ry="{(r + 3) * 0.45:.1f}" '
-        f'fill="#000" opacity="0.18"/>',
+        # 透明的點擊範圍：整座小島加上地標都點得到
+        f'<rect x="{x - rx:.1f}" y="{y - 34:.1f}" width="{2 * rx}" height="58" fill="#000" opacity="0"/>',
     ]
     if plan_tag:
         ring = TODAY_RING if plan_tag == "today" else OVERDUE_RING
         parts.append(
-            f'<circle class="plan-ring" cx="{x:.1f}" cy="{y:.1f}" r="{r + 4}" fill="none" '
+            f'<ellipse class="plan-ring" cx="{x:.1f}" cy="{iy:.1f}" rx="{rx + 6}" ry="16" fill="none" '
             f'stroke="{ring}" stroke-width="3"/>'
         )
-    # 圓台：側邊（較深）先畫，關卡面疊在上面，露出 DEPTH 的厚度
-    face, rim = ("url(#faceDone)", "#E8A33A") if s.done else ("url(#faceOpen)", color)
-    side = _shade(rim, 0.72)
+    top = "#EBD27A" if s.done else farm_art.GRASS_LIGHT
     parts.append(
-        f'<g class="platform">'
-        f'<circle cx="{x:.1f}" cy="{y + DEPTH:.1f}" r="{r}" fill="{_shade(side, 0.85)}"/>'
-        f'<rect x="{x - r:.1f}" y="{y:.1f}" width="{2 * r}" height="{DEPTH}" fill="{side}"/>'
-        # 側邊上半段稍亮：圓柱面受光
-        f'<rect x="{x - r:.1f}" y="{y:.1f}" width="{r * 0.9:.1f}" height="{DEPTH}" fill="#FFFFFF" opacity="0.12"/>'
-        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{face}" stroke="{rim}" stroke-width="{4 if boss else 3}"/>'
-        # 左上角的高光，讓關卡面看起來是亮面
-        f'<ellipse cx="{x - r * 0.35:.1f}" cy="{y - r * 0.4:.1f}" rx="{r * 0.38:.1f}" ry="{r * 0.2:.1f}" '
-        f'fill="#FFFFFF" opacity="{0.75 if s.done else 0.5}"/>'
+        '<g class="platform">'
+        + farm_art.island(x, iy, rx=rx, ry=11, top=top)
+        + farm_art.landmark(farm_art.landmark_kind(s.topic_id), x, iy + 2, boss=boss)
+    )
+    # 關卡編號的小牌：做完是金色打勾，沒做是白底、外框是難度顏色
+    plate_fill, plate_rim, text_fill = (GOLD, "#C98A1E", INK) if s.done else ("#FFFFFF", color, color)
+    parts.append(
+        f'<circle cx="{x + 1:.1f}" cy="{y + 19:.1f}" r="10" fill="#000" opacity="0.2"/>'
+        f'<circle cx="{x:.1f}" cy="{y + 17:.1f}" r="10" fill="{plate_fill}" stroke="{plate_rim}" stroke-width="2.5"/>'
+        f'<text x="{x:.1f}" y="{y + 21:.1f}" class="mark" fill="{text_fill}">{"✓" if s.done else level}</text>'
+        "</g>"
     )
     if s.done:
-        parts.append(f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{INK}">✓</text>')
-    else:
-        parts.append(f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{color}">{level}</text>')
-    parts.append("</g>")
+        # 做完的關卡插一面小金旗
+        parts.append(
+            f'<line x1="{x + rx - 6:.1f}" y1="{iy - 2:.1f}" x2="{x + rx - 6:.1f}" y2="{iy - 20:.1f}" '
+            f'stroke="{farm_art.WOOD_DARK}" stroke-width="1.5"/>'
+            f'<polygon points="{x + rx - 6:.1f},{iy - 20:.1f} {x + rx + 4:.1f},{iy - 17:.1f} '
+            f'{x + rx - 6:.1f},{iy - 14:.1f}" fill="{GOLD}" stroke="#C98A1E" stroke-width="0.8"/>'
+        )
     if boss:
-        # 皇冠壓在關卡上緣（像戴帽子），不往上凸，免得碰到上一排的光圈
-        parts.append(f'<text x="{x:.1f}" y="{y - r + 6:.1f}" class="crown">👑</text>')
+        parts.append(f'<text x="{x - 14:.1f}" y="{y + 22:.1f}" class="crown">👑</text>')
     if focus:
-        parts.append(f'<text x="{x + r - 2:.1f}" y="{y - r + 6:.1f}" class="focus-star">⭐</text>')
+        parts.append(f'<text x="{x + rx - 4:.1f}" y="{y - 6:.1f}" class="focus-star">⭐</text>')
+    if adventuring:
+        # 冒險中的旗子＋計時（秒數由頁面的 JavaScript 即時更新 .adv-time）
+        parts.append(
+            f'<g class="adventure-flag" style="pointer-events:none">'
+            f'<rect x="{x - 34:.1f}" y="{y - 52:.1f}" width="68" height="18" rx="9" fill="#2F7FD1"/>'
+            f'<polygon points="{x - 4:.1f},{y - 34:.1f} {x + 4:.1f},{y - 34:.1f} {x:.1f},{y - 29:.1f}" fill="#2F7FD1"/>'
+            f'<text x="{x:.1f}" y="{y - 39:.1f}" class="adv-time">🧭 冒險中</text>'
+            "</g>"
+        )
     parts.append(f"</{tag}>")
     return "".join(parts)
 
@@ -476,6 +492,7 @@ def render_svg(
     zone_names: dict[int, str] | None = None,
     by_topic: bool = True,
     tilt: bool = False,
+    adventure_id: int | None = None,
 ) -> str:
     """整張地圖的 SVG 字串。寬度跟著容器縮放。
 
@@ -496,9 +513,12 @@ def render_svg(
         "<style>"
         f".topic{{font-size:11px;font-weight:600;fill:{INK}}}"
         f".topic-count{{font-size:10px;fill:{INK};opacity:0.7}}"
-        ".mark{font-size:13px;font-weight:800;text-anchor:middle}"
+        ".mark{font-size:11px;font-weight:800;text-anchor:middle}"
         ".zone{font-size:14px;font-weight:700;fill:#FFF6E0;text-anchor:middle}"
         ".crown{font-size:12px;text-anchor:middle;pointer-events:none}"
+        ".adv-time{font-size:10.5px;font-weight:700;fill:#fff;text-anchor:middle}"
+        "@keyframes advpulse{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}"
+        ".adventure-flag{animation:advpulse 1.2s ease-in-out infinite}"
         ".focus-star{font-size:10px;text-anchor:middle;pointer-events:none}"
         ".goal{font-size:22px;text-anchor:middle;pointer-events:none}"
         ".stage{cursor:pointer}"
@@ -509,7 +529,7 @@ def render_svg(
         "@keyframes breathe{0%,100%{opacity:.95}50%{opacity:.35}}"
         ".bear-bob{animation:bob 1.6s ease-in-out infinite}"
         ".halo{animation:breathe 1.8s ease-in-out infinite}"
-        "@media (prefers-reduced-motion: reduce){.bear-bob,.halo{animation:none}"
+        "@media (prefers-reduced-motion: reduce){.bear-bob,.halo,.adventure-flag{animation:none}"
         ".stage .platform{transition:none}}"
         "</style>",
     ]
@@ -632,7 +652,8 @@ def render_svg(
         tid = p.stage.task_id
         tag = "today" if tid in today_ids else "overdue" if tid in overdue_ids else ""
         out.append(
-            _node(p, safe_url(urls.get(tid)), tid == here_id, tag, level=level, focus=tid in focus_ids)
+            _node(p, safe_url(urls.get(tid)), tid == here_id, tag, level=level,
+                  focus=tid in focus_ids, adventuring=tid == adventure_id)
         )
 
     spot = next((p for p in placed if p.stage.task_id == here_id), None)
@@ -640,7 +661,7 @@ def render_svg(
         # 光圈標出是哪一關；小熊站在它左邊的小路上（兩關中間的空檔）。
         # 站在關卡正上方會壓到上一排的關卡——排距只有 ROW_HEIGHT。
         out.append(
-            f'<circle class="halo" cx="{spot.x:.1f}" cy="{spot.y:.1f}" r="{NODE_R + 8}" fill="none" '
+            f'<ellipse class="halo" cx="{spot.x:.1f}" cy="{spot.y + 4:.1f}" rx="34" ry="19" fill="none" '
             f'stroke="#F28C8C" stroke-width="3" stroke-dasharray="6 5" style="pointer-events:none"/>'
         )
         out.append(f'<g class="bear-bob">{_bear(spot.x - BEAR_OFFSET, spot.y - 6)}</g>')

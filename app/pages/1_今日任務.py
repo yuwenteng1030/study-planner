@@ -134,10 +134,11 @@ def _render_page() -> None:
             return
 
         st.subheader(f"{today:%m/%d}（{summary['today_minutes']} 分鐘）")
+        adventure = repo.load_adventure(session, user_id)
         seen_topics: set[str] = set()
         for item in today_items:
             topic_id = item.task.topic_id
-            _render_item(session, item, show_key_points=topic_id not in seen_topics)
+            _render_item(session, item, show_key_points=topic_id not in seen_topics, adventure=adventure)
             seen_topics.add(topic_id)
 
         with progress_slot:
@@ -208,7 +209,17 @@ def _map_link(task_id: int) -> None:
         pass
 
 
-def _render_item(session, item, show_key_points: bool = True) -> None:
+def _start_timer(task_id: int) -> None:
+    with session_scope() as session:
+        repo.start_adventure(session, get_current_user(), task_id)
+
+
+def _cancel_timer() -> None:
+    with session_scope() as session:
+        repo.cancel_adventure(session, get_current_user())
+
+
+def _render_item(session, item, show_key_points: bool = True, adventure=None) -> None:
     """一張任務卡。打勾即寫入 ``progress_events``。
 
     這裡刻意**不呼叫** ``st.rerun()``。
@@ -260,6 +271,17 @@ def _render_item(session, item, show_key_points: bool = True) -> None:
             )
             st.markdown(f"[在 HackerRank 開啟題目]({task.url})")
             _map_link(task.id)
+            if not done:
+                timing = adventure is not None and adventure.task_id == task.id
+                if timing:
+                    minutes = repo.adventure_minutes(adventure.started_at)
+                    st.caption(f"🧭 計時中，已經 {minutes} 分鐘。打勾時沒填分鐘數，就用計時的時間。")
+                    st.button("放棄計時", key=f"cancel_timer_{item.id}", on_click=_cancel_timer)
+                else:
+                    st.button(
+                        "⏱ 開始計時", key=f"start_timer_{item.id}", on_click=_start_timer, args=(task.id,),
+                        help="開始做這一題時按一下；打勾時會自動算出花了幾分鐘（同時只計時一題）",
+                    )
 
         # 「為什麼重要」——這是整個網站的賣點，不是裝飾。
         if item.reason:
@@ -283,7 +305,7 @@ def _render_item(session, item, show_key_points: bool = True) -> None:
             min_value=0,
             max_value=600,
             value=item.actual_minutes,
-            placeholder=f"沒填就不算進估時校正（預估 {task.est_minutes}）",
+            placeholder=f"沒填就用計時；沒計時就不算進估時校正（預估 {task.est_minutes}）",
             step=5,
             key=f"actual_{item.id}",
             help="打勾時會一起記錄下來。之後用來校正預估時間。",
