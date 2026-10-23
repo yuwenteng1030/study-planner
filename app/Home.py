@@ -27,6 +27,7 @@ from core.planner import build_plan  # noqa: E402
 from core.scoring import JDStats, UserContext  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
+from llm.client import explain_many  # noqa: E402
 
 st.set_page_config(page_title="學習計畫", page_icon="🗺️", layout="centered")
 
@@ -147,6 +148,15 @@ def main() -> None:
         "preset_id": goal.id,
     }
 
+    # 先讀題目資料、在交易外呼叫 Claude（會等網路），再開交易寫入。
+    with session_scope() as session:
+        explain_inputs = repo.load_explain_inputs(
+            session, [item.task_id for item in core_plan.items]
+        )
+    with st.spinner("正在寫每一題的說明……"):
+        explanations = explain_many(explain_inputs)
+    generated = {tid for tid, e in explanations.items() if e.is_generated}
+
     with session_scope() as session:
         repo.create_plan(
             session,
@@ -157,6 +167,8 @@ def main() -> None:
             days=int(days),
             daily_minutes=daily_minutes,
             core_plan=core_plan,
+            reasons={tid: e.text for tid, e in explanations.items() if e.text},
+            generated_task_ids=generated,
         )
 
     _show_result(core_plan, topic_names, int(days), daily_minutes)

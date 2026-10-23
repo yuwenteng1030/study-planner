@@ -57,6 +57,22 @@ _schema_ready = False
 _schema_lock = threading.Lock()
 
 
+#: 既有資料庫補欄位用：``(表, 欄位, SQL 型別)``。只能加可為 NULL 的欄位。
+_ADDED_COLUMNS = [("plan_items", "reason_source", "VARCHAR(10)")]
+
+
+def _add_missing_columns() -> None:
+    """``create_all`` 不會改既有的表，所以新欄位在這裡用 ALTER TABLE 補。"""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(_engine)
+    with _engine.begin() as conn:
+        for table, column, sql_type in _ADDED_COLUMNS:
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            if column not in existing:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
+
+
 def _ensure_schema() -> None:
     """第一次開交易時補上缺的資料表。
 
@@ -70,6 +86,7 @@ def _ensure_schema() -> None:
     with _schema_lock:
         if not _schema_ready:
             init_db()
+            _add_missing_columns()
             _schema_ready = True
 
 

@@ -1,0 +1,120 @@
+"""建立計畫時的「為什麼該做」說明：來源標記、並行呼叫、失敗退回預存。
+
+一律不呼叫外部服務：用假的 ``anthropic.Anthropic``。
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+from types import SimpleNamespace
+
+from sqlalchemy import select, text
+
+import llm.client as client_mod
+from core.planner import build_plan
+from core.scoring import JDStats, UserContext
+from db import repositories as repo
+from db.models import PlanItem
+
+
+class _FakeAnthropic:
+    def __init__(self, reply="一句客製說明", fail_on=None, **_kw):
+        self._reply, self._fail_on = reply, fail_on
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kw):
+        if self._fail_on and self._fail_on in kw["messages"][0]["content"]:
+            raise RuntimeError("boom")
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self._reply)])
+
+
+def _inputs(session):
+    core_plan = build_plan(
+        topics=repo.load_topic_nodes(session),
+        tasks=repo.load_task_inputs(session),
+        start_date=_dt.date(2026, 10, 26),
+        days=3,
+        daily_minutes=60,
+        user=UserContext(),
+        jd=JDStats(),
+    )
+    return core_plan, repo.load_explain_inputs(session, [i.task_id for i in core_plan.items])
+
+
+def _make(session, core_plan, explanations):
+    repo.ensure_user(session, 1)
+    return repo.create_plan(
+        session,
+        user_id=1,
+        goal_text="t",
+        parsed_goal={},
+        start_date=_dt.date(2026, 10, 26),
+        days=3,
+        daily_minutes=60,
+        core_plan=core_plan,
+        reasons={k: v.text for k, v in explanations.items() if v.text},
+        generated_task_ids={k for k, v in explanations.items() if v.is_generated},
+    )
+
+
+def test_without_key_everything_is_static(db_session, monkeypatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    core_plan, inputs = _inputs(db_session)
+    explanations = client_mod.explain_many(inputs)
+    assert all(e.source in ("static", "none") for e in explanations.values())
+    plan = _make(db_session, core_plan, explanations)
+    rows = db_session.scalars(select(PlanItem).where(PlanItem.plan_id == plan.id)).all()
+    assert rows and all(r.reason_source == "static" for r in rows)
+
+
+def test_generated_text_is_marked_llm_and_failures_fall_back(db_session, monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    core_plan, inputs = _inputs(db_session)
+    bad_title = inputs[0]["title"]
+    import anthropic
+
+    monkeypatch.setattr(
+        anthropic, "Anthropic", lambda **kw: _FakeAnthropic(fail_on=f"題目：{bad_title}\n", **kw)
+    )
+    explanations = client_mod.explain_many(inputs)
+    assert len(explanations) == len(inputs)
+    assert explanations[inputs[0]["id"]].source in ("static", "none")  # 失敗退回預存
+    assert any(e.is_generated for e in explanations.values())
+    plan = _make(db_session, core_plan, explanations)
+    by_task = {r.task_id: r for r in db_session.scalars(
+        select(PlanItem).where(PlanItem.plan_id == plan.id))}
+    assert by_task[inputs[0]["id"]].reason_source == "static"
+    llm_rows = [r for r in by_task.values() if r.reason_source == "llm"]
+    assert llm_rows and all(r.reason == "一句客製說明" for r in llm_rows)
+
+
+def test_generated_text_drops_links_and_extra_lines(db_session, monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    import anthropic
+
+    monkeypatch.setattr(
+        anthropic, "Anthropic",
+        lambda **kw: _FakeAnthropic(reply="練雜湊[點我](http://evil.example)\n第二行", **kw),
+    )
+    out = client_mod.explain_task("T", "Arrays", [], "預存")
+    assert out.text == "練雜湊點我" and "http" not in out.text
+
+
+def test_existing_database_gets_the_new_column(tmp_path) -> None:
+    from sqlalchemy import create_engine
+
+    import db.session as session_mod
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}", future=True)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE plan_items (id INTEGER PRIMARY KEY, reason TEXT)"))
+    original = session_mod._engine
+    session_mod._engine = engine
+    try:
+        session_mod._add_missing_columns()
+        session_mod._add_missing_columns()  # 重跑要安全
+    finally:
+        session_mod._engine = original
+    with engine.connect() as conn:
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(plan_items)"))]
+    assert "reason_source" in cols

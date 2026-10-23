@@ -9,6 +9,7 @@
 這也是為什麼 ``static_note`` 是題庫的必填欄位，而不是「有空再補」。
 
 刻意**不做**的事（都排在 v0.1 之後）：快取、重試、成本統計、串流。
+（``explain_many`` 已在建立計畫時呼叫；任務卡用 ``plan_items.reason_source`` 標出來源。）
 v0.1 的目標是跑得起來且不會因為外部服務而壞掉，不是跑得省。
 """
 
@@ -24,7 +25,7 @@ from core.encouragement import Cheer, clean_generated
 
 #: 用哪個模型。選 Haiku 是因為這個任務是「把已知重點改寫成一句話」，
 #: 不需要推理能力，而便宜與快才直接影響使用體驗。
-DEFAULT_MODEL = "claude-3-5-haiku-20241022"
+DEFAULT_MODEL = "claude-haiku-5-5"
 
 #: 生成長度上限。說明是要在任務卡上顯示的，長了沒人看。
 MAX_TOKENS = 200
@@ -79,7 +80,7 @@ def explain_task(
     try:
         import anthropic
 
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(timeout=EXPLAIN_TIMEOUT_SECONDS, max_retries=0)
         hints = "、".join(key_points) if key_points else "（無）"
         response = client.messages.create(
             model=model,
@@ -96,9 +97,10 @@ def explain_task(
                 }
             ],
         )
-        text = "".join(
-            block.text for block in response.content if block.type == "text"
-        ).strip()
+        # 任務卡用 st.info 畫 Markdown：拿掉連結與網址、只留第一行
+        text = clean_generated(
+            "".join(block.text for block in response.content if block.type == "text")
+        )
         if not text:
             return fallback
         return Explanation(text, "llm")
@@ -109,6 +111,14 @@ def explain_task(
         return fallback
 
 
+#: 同時送幾個請求。一份計畫 60 幾題，逐題等會讓「排出計畫」卡上一分鐘；
+#: 8 條夠快，又不會一次打爆速率限制。
+EXPLAIN_WORKERS = 8
+
+#: 單題等多久。逾時就用預存說明，不重試。
+EXPLAIN_TIMEOUT_SECONDS = 10.0
+
+
 def explain_many(
     tasks: list[dict],
     model: str = DEFAULT_MODEL,
@@ -116,19 +126,26 @@ def explain_many(
     """一次處理多題。
 
     ``tasks`` 每筆需要 ``id``／``title``／``topic_name``／``key_points``／
-    ``static_note``。逐題呼叫，不做批次——v0.1 一份計畫只有 20 幾題，
-    批次的複雜度換不到有感的速度。
+    ``static_note``。用執行緒並行呼叫（不用批次 API）；沒有 API key 時直接回傳
+    預存說明，連執行緒都不開。**不要在資料庫交易裡呼叫它**，理由同 ``encourage``。
     """
-    return {
-        task["id"]: explain_task(
+    def one(task: dict) -> Explanation:
+        return explain_task(
             title=task["title"],
             topic_name=task.get("topic_name", ""),
             key_points=task.get("key_points") or [],
             static_note=task.get("static_note"),
             model=model,
         )
-        for task in tasks
-    }
+
+    if not is_available() or len(tasks) <= 1:
+        return {task["id"]: one(task) for task in tasks}
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=EXPLAIN_WORKERS) as pool:
+        results = list(pool.map(one, tasks))
+    return {task["id"]: result for task, result in zip(tasks, results)}
 
 
 # ---------------------------------------------------------------------------

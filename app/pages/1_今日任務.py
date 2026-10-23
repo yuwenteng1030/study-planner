@@ -247,6 +247,9 @@ def _render_item(session, item) -> None:
         # 「為什麼重要」——這是整個網站的賣點，不是裝飾。
         if item.reason:
             st.info(item.reason, icon="💡")
+            st.caption(
+                "✨ Claude 即時生成" if item.reason_source == "llm" else "📌 預存說明（未使用 AI 生成）"
+            )
         if item.key_points:
             st.caption("重點：" + "、".join(repo.key_point_text(p) for p in item.key_points))
 

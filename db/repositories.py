@@ -114,6 +114,25 @@ def load_task_static_notes(session: Session) -> dict[int, str | None]:
     return {row.id: row.static_note for row in rows}
 
 
+def load_explain_inputs(session: Session, task_ids: list[int]) -> list[dict]:
+    """``llm.client.explain_many`` 要的輸入：題名、主題名、主題重點、預存說明。"""
+    topic_rows = {t.id: t for t in session.scalars(select(Topic)).all()}
+    tasks = session.scalars(select(Task).where(Task.id.in_(task_ids))).all()
+    out = []
+    for task in tasks:
+        topic = topic_rows.get(task.topic_id)
+        out.append(
+            {
+                "id": task.id,
+                "title": task.title,
+                "topic_name": topic.name if topic else "",
+                "key_points": [key_point_text(p) for p in (topic.key_points or ())] if topic else [],
+                "static_note": task.static_note,
+            }
+        )
+    return out
+
+
 def build_user_context(parsed_goal: dict) -> UserContext:
     """從 ``plans.parsed_goal`` 還原評分需要的使用者條件。"""
     levels: dict[str, str] = {}
@@ -144,11 +163,14 @@ def create_plan(
     core_plan: CorePlan,
     level: str = "normal",
     reasons: dict[int, str] | None = None,
+    generated_task_ids: frozenset[int] | set[int] = frozenset(),
 ) -> Plan:
     """把排好的計畫寫進資料庫，並把同一使用者的舊計畫收起來。
 
     ``reasons`` 是 task id → 「為什麼推薦」。沒給或缺某一題時，
     退回 ``tasks.static_note``，所以 LLM 掛掉也不影響這裡。
+    ``generated_task_ids`` 是 ``reasons`` 裡真的由 LLM 生成的那幾題，
+    其餘一律記成預存（``reason_source = "static"``）。
     """
     # 同時只能有一份進行中的計畫，否則「今日任務」不知道該顯示哪一份。
     for old in session.scalars(
@@ -183,6 +205,11 @@ def create_plan(
                 priority=item.priority,
                 status="todo",
                 reason=reasons.get(item.task_id) or static_notes.get(item.task_id),
+                reason_source=(
+                    "llm"
+                    if reasons.get(item.task_id) and item.task_id in generated_task_ids
+                    else "static"
+                ),
                 key_points=key_points.get(item.topic_id, []),
             )
         )

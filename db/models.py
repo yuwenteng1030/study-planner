@@ -250,6 +250,10 @@ class PlanItem(Base):
     #: 「為什麼推薦這一項」。LLM 生成，失敗時退回 tasks.static_note。
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    #: 這句話怎麼來的：``llm`` 即時生成 / ``static`` 預存。任務卡用它標出來，
+    #: 讓人知道現在看到的是客製的還是罐頭。舊資料是 NULL（當預存）。
+    reason_source: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
     #: 顯示用的重點提示，從 topics.key_points 複製一份快照。
     key_points: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
 
