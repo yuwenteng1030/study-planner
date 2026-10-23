@@ -18,6 +18,15 @@
 - 走過的路變金色：前後兩關都做完的那一段小路畫成金色，一眼看得出走到哪裡。
 - 每一區的標題列有自己的裝飾（草原、森林、雪山），起點有城堡、終點有獎盃。
 - 重點題組的關卡右上角有一顆星（只在顯示整個題庫時畫，重點路線裡每關都是重點）。
+
+立體感（同日第二輪，使用者要「更像遊戲、立體」）：
+
+- 關卡是**有厚度的圓台**：上面是關卡面，下面一圈較深的側邊，再下面是影子；滑鼠移上去會浮起來。
+- 小路是**有厚度的路面**（下面一條深色的路基）。
+- 每一區是**漸層的地面**，下緣一條懸崖邊，像一層一層疊上去的地形。
+- 整張圖可以**像桌遊盤面一樣往後傾斜**（``tilt=True``，用 CSS 的 3D 透視）；
+  點擊與小卡的位置靠瀏覽器算實際座標，傾斜後照樣對得上。
+- 小熊會跳、光圈會呼吸；系統設定「減少動態」時不動。
 """
 
 from __future__ import annotations
@@ -66,12 +75,63 @@ GOLD = "#FFD66B"
 INK = "#4A3728"
 #: 走過的路
 PATH_DONE = "#F2B84B"
+#: 關卡圓台的厚度（側邊露出來的高度）
+DEPTH = 6
+#: 路基比路面低多少
+ROAD_DEPTH = 5
 
 #: Boss 關（Hard）比一般關卡大多少
 BOSS_EXTRA = 4
 
+#: 空格裡的景物（依區輪流用）。只放在「這一排沒有關卡、小路也不會經過」的格子。
+SCENERY: dict[int, tuple[str, ...]] = {
+    0: ("🌳", "🌷", "🪨", "🏡"),
+    1: ("🌻", "🌳", "🌾", "🪨"),
+    2: ("🌲", "🍄", "🌲", "🪵"),
+    3: ("🏔️", "⛄", "🌲", "❄️"),
+}
+
+
+def scenery_spots(placed: list[Placed], columns: tuple[float, ...]) -> list[tuple[float, float, int]]:
+    """（x, y, 區號）：可以放景物的空格。
+
+    只看「沒排滿的那一排」：一排裡關卡之間一定有小路，空格只會出現在這一排的關卡
+    範圍之外；另外排除小路往上一排（或上一區）走時會經過的那一側。
+    """
+    rows: dict[float, list[Placed]] = {}
+    for p in placed:
+        rows.setdefault(p.y, []).append(p)
+    order = {id(p): i for i, p in enumerate(placed)}
+    spots = []
+    for y, members in rows.items():
+        if len(members) >= len(columns):
+            continue
+        xs = [m.x for m in members]
+        lo, hi = min(xs), max(xs)
+        # 這一排的前一關與後一關（路從哪裡進來、往哪裡出去）的 x 也算在路的範圍裡
+        first, last = min(order[id(m)] for m in members), max(order[id(m)] for m in members)
+        for neighbor in (first - 1, last + 1):
+            if 0 <= neighbor < len(placed):
+                lo, hi = min(lo, placed[neighbor].x), max(hi, placed[neighbor].x)
+        for c in columns:
+            if c < lo - 40 or c > hi + 40:
+                spots.append((c, y, members[0].stage.zone))
+    return spots
+
+
 #: 每一區標題列的裝飾（只是畫面）。emoji 用 SVG 文字畫，不用外部圖檔。
 ZONE_DECOR: dict[int, str] = {0: "🏰", 1: "🌼 🌾 🌼", 2: "🌲 🍄 🌲", 3: "⛰️ ❄️ ⛰️"}
+
+
+def _shade(hex_color: str, factor: float) -> str:
+    """把顏色調暗（factor < 1）或調亮（factor > 1，往白色靠）。給立體的側邊與高光用。"""
+    h = hex_color.lstrip("#")
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    if factor < 1:
+        r, g, b = (int(c * factor) for c in (r, g, b))
+    else:
+        r, g, b = (int(c + (255 - c) * (factor - 1)) for c in (r, g, b))
+    return f"#{r:02X}{g:02X}{b:02X}"
 
 
 def zone_theme(zone: int) -> tuple[str, str, str]:
@@ -300,7 +360,9 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
     parts = [
         f'<{tag} class="{classes}" data-task="{int(s.task_id)}" data-difficulty="{letter}"{href}>',
         f"<title>{escape(tip)}</title>",
-        f'<circle cx="{x:.1f}" cy="{y + 3:.1f}" r="{r + 2}" fill="#000" opacity="0.12"/>',
+        # 影子落在圓台底下偏右下
+        f'<ellipse cx="{x + 3:.1f}" cy="{y + DEPTH + 6:.1f}" rx="{r + 3}" ry="{(r + 3) * 0.45:.1f}" '
+        f'fill="#000" opacity="0.18"/>',
     ]
     if plan_tag:
         ring = TODAY_RING if plan_tag == "today" else OVERDUE_RING
@@ -308,17 +370,23 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
             f'<circle class="plan-ring" cx="{x:.1f}" cy="{y:.1f}" r="{r + 4}" fill="none" '
             f'stroke="{ring}" stroke-width="3"/>'
         )
+    # 圓台：側邊（較深）先畫，關卡面疊在上面，露出 DEPTH 的厚度
+    face, rim = (GOLD, "#E8A33A") if s.done else ("#FFFFFF", color)
+    side = _shade(rim, 0.72)
+    parts.append(
+        f'<g class="platform">'
+        f'<circle cx="{x:.1f}" cy="{y + DEPTH:.1f}" r="{r}" fill="{side}"/>'
+        f'<rect x="{x - r:.1f}" y="{y:.1f}" width="{2 * r}" height="{DEPTH}" fill="{side}"/>'
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{face}" stroke="{rim}" stroke-width="{4 if boss else 3}"/>'
+        # 左上角的高光，讓關卡面看起來是亮面
+        f'<ellipse cx="{x - r * 0.35:.1f}" cy="{y - r * 0.4:.1f}" rx="{r * 0.38:.1f}" ry="{r * 0.2:.1f}" '
+        f'fill="#FFFFFF" opacity="{0.75 if s.done else 0.5}"/>'
+    )
     if s.done:
-        parts.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{GOLD}" stroke="#E8A33A" stroke-width="3"/>'
-            f'<circle cx="{x - r / 3:.1f}" cy="{y - r / 3:.1f}" r="{r / 4:.1f}" fill="#FFF6D5" opacity="0.8"/>'
-            f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{INK}">✓</text>'
-        )
+        parts.append(f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{INK}">✓</text>')
     else:
-        parts.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="#FFFFFF" stroke="{color}" stroke-width="{4 if boss else 3}"/>'
-            f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{color}">{level}</text>'
-        )
+        parts.append(f'<text x="{x:.1f}" y="{y + 5:.1f}" class="mark" fill="{color}">{level}</text>')
+    parts.append("</g>")
     if boss:
         # 皇冠壓在關卡上緣（像戴帽子），不往上凸，免得碰到上一排的光圈
         parts.append(f'<text x="{x:.1f}" y="{y - r + 6:.1f}" class="crown">👑</text>')
@@ -350,6 +418,7 @@ def render_svg(
     focus_ids: frozenset[int] | set[int] = frozenset(),
     zone_names: dict[int, str] | None = None,
     by_topic: bool = True,
+    tilt: bool = False,
 ) -> str:
     """整張地圖的 SVG 字串。寬度跟著容器縮放。
 
@@ -365,7 +434,8 @@ def render_svg(
 
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {height:.0f}" '
-        f'width="100%" style="font-family:system-ui,sans-serif;display:block">',
+        f'width="100%" class="board{" tilt" if tilt else ""}" '
+        f'style="font-family:system-ui,sans-serif;display:block">',
         "<style>"
         f".topic{{font-size:11px;font-weight:600;fill:{INK}}}"
         f".topic-count{{font-size:10px;fill:{INK};opacity:0.7}}"
@@ -375,10 +445,30 @@ def render_svg(
         ".focus-star{font-size:10px;text-anchor:middle;pointer-events:none}"
         ".decor{font-size:16px;text-anchor:middle;pointer-events:none;opacity:0.9}"
         ".goal{font-size:22px;text-anchor:middle;pointer-events:none}"
+        ".scenery{font-size:24px;text-anchor:middle;pointer-events:none}"
         ".stage{cursor:pointer}"
-        ".stage:hover circle,.stage:focus circle{filter:brightness(0.93)}"
+        # 滑鼠移上去，圓台浮起來（影子不動）
+        ".stage .platform{transition:transform .15s ease-out}"
+        ".stage:hover .platform,.stage:focus .platform{transform:translateY(-4px)}"
+        "@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}"
+        "@keyframes breathe{0%,100%{opacity:.95}50%{opacity:.35}}"
+        ".bear-bob{animation:bob 1.6s ease-in-out infinite}"
+        ".halo{animation:breathe 1.8s ease-in-out infinite}"
+        "@media (prefers-reduced-motion: reduce){.bear-bob,.halo{animation:none}"
+        ".stage .platform{transition:none}}"
         "</style>",
     ]
+    # 每一區的地面漸層：上淡下濃，像往前延伸的地面
+    out.append("<defs>")
+    for b in bands:
+        _, bg, _ = zone_theme(b.zone)
+        out.append(
+            f'<linearGradient id="ground{b.zone}" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0" stop-color="{_shade(bg, 1.12)}"/>'
+            f'<stop offset="1" stop-color="{_shade(bg, 0.86)}"/>'
+            "</linearGradient>"
+        )
+    out.append("</defs>")
 
     for b in bands:
         name, bg, accent = zone_theme(b.zone)
@@ -389,7 +479,11 @@ def render_svg(
         pill = 24 + len(label) * 13
         pill_x = _label_x(b, placed, pill)
         out.append(
-            f'<rect x="0" y="{b.top:.1f}" width="{WIDTH}" height="{b.bottom - b.top:.1f}" fill="{bg}"/>'
+            f'<rect x="0" y="{b.top:.1f}" width="{WIDTH}" height="{b.bottom - b.top:.1f}" fill="url(#ground{b.zone})"/>'
+            # 下緣的懸崖邊：一層地形疊在下一層上面
+            f'<rect x="0" y="{b.bottom - 7:.1f}" width="{WIDTH}" height="7" fill="{_shade(accent, 0.8)}" opacity="0.45"/>'
+            # 區名做成有厚度的牌子
+            f'<rect x="{pill_x:.1f}" y="{b.top + 13:.1f}" rx="13" width="{pill}" height="26" fill="{_shade(accent, 0.7)}"/>'
             f'<rect x="{pill_x:.1f}" y="{b.top + 10:.1f}" rx="13" width="{pill}" height="26" fill="{accent}"/>'
             f'<text x="{pill_x + pill / 2:.1f}" y="{b.top + 28:.1f}" class="zone">{escape(label)}</text>'
         )
@@ -411,6 +505,9 @@ def render_svg(
     points = [(p.x, p.y) for p in placed]
     path = _smooth_path(points)
     out.append(
+        # 路基：比路面低一點、深一點，看起來路是墊高的
+        f'<path d="{path}" fill="none" stroke="#B89A72" stroke-width="13" stroke-linecap="round" '
+        f'transform="translate(0,{ROAD_DEPTH})"/>'
         f'<path d="{path}" fill="none" stroke="#D9C3A0" stroke-width="12" stroke-linecap="round"/>'
     )
     # 走過的路：前後兩關都做完的那一段畫成金色（用整條路的同一段曲線，弧度才對得上）
@@ -424,6 +521,15 @@ def render_svg(
         f'<path d="{path}" fill="none" stroke="#FFF8EA" stroke-width="3" '
         f'stroke-dasharray="2 9" stroke-linecap="round"/>'
     )
+
+    # 空格裡的景物：有影子的樹、石頭、花，讓盤面不空
+    columns_used = FOCUS_COLUMNS if not by_topic else COLUMNS
+    for i, (sx, sy, zone) in enumerate(scenery_spots(placed, columns_used)):
+        items = SCENERY.get(zone, SCENERY[max(SCENERY)])
+        out.append(
+            f'<ellipse cx="{sx:.1f}" cy="{sy + 10:.1f}" rx="13" ry="4" fill="#000" opacity="0.15"/>'
+            f'<text x="{sx:.1f}" y="{sy + 8:.1f}" class="scenery">{items[i % len(items)]}</text>'
+        )
 
     if placed:
         # 終點的獎盃放在最後一關旁邊。小熊站在關卡左邊（x - BEAR_OFFSET），
@@ -453,7 +559,7 @@ def render_svg(
             f'<circle class="halo" cx="{spot.x:.1f}" cy="{spot.y:.1f}" r="{NODE_R + 8}" fill="none" '
             f'stroke="#F28C8C" stroke-width="3" stroke-dasharray="6 5" style="pointer-events:none"/>'
         )
-        out.append(_bear(spot.x - BEAR_OFFSET, spot.y - 6))
+        out.append(f'<g class="bear-bob">{_bear(spot.x - BEAR_OFFSET, spot.y - 6)}</g>')
 
     out.append("</svg>")
     return "".join(out)

@@ -53,7 +53,12 @@ CHEER_KEY = "map_cheer"  # 破關的鼓勵訊息，下一輪用 toast 顯示一�
 # st.image 又點不到。v2 元件不經過消毒，所以 SVG 裡的文字一律在 core/map_art.py
 # escape、連結只放行 HackerRank；小卡的文字在下面的 JS 一律用 textContent。
 _MAP_CSS = """
-.map-root { position: relative; }
+.map-root { position: relative; perspective: 1400px; }
+/* 立體盤面：往後傾斜，下緣固定，像攤在桌上的遊戲地圖。小卡不在 svg 裡，所以不會跟著斜 */
+.map-root svg.tilt {
+  transform: rotateX(18deg); transform-origin: 50% 100%;
+  border-radius: 18px; box-shadow: 0 24px 40px rgba(0,0,0,.35);
+}
 .card {
   position: absolute; z-index: 2; width: 240px; box-sizing: border-box;
   background: #FFFDF7; color: #4A3728; border: 2px solid #E8A33A; border-radius: 14px;
@@ -347,6 +352,8 @@ def main() -> None:
                 focus_ids=frozenset() if focus_only else frozenset(focus_stages),
                 zone_names=FOCUS_ZONE_NAMES if focus_only else None,
                 by_topic=not focus_only,
+                # 重點路線不高，傾斜起來像桌遊盤面；整個題庫很長，傾斜會讓上面幾區縮得太小
+                tilt=focus_only,
             ),
             "here": here.task_id if here else None,
             "focus": _focus_payload(focus, urls) if focus else None,

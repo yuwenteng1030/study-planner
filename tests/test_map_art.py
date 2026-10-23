@@ -186,7 +186,7 @@ def test_done_stage_shows_a_check_and_open_stage_shows_its_level_number() -> Non
     ]
     root = _parse(render_svg(stages, _urls(stages), here_id=2))
     nodes = root.findall(STAGE, NS)
-    marks = {n.get("data-task"): n.find("svg:text[@class='mark']", NS).text for n in nodes}
+    marks = {n.get("data-task"): n.find(".//svg:text[@class='mark']", NS).text for n in nodes}
     # 關卡編號＝路線上的第幾關；難度放在 data-difficulty（外框顏色）
     assert marks == {"1": "✓", "2": "2", "3": "3"}
     assert {n.get("data-task"): n.get("data-difficulty") for n in nodes} == {"1": "E", "2": "M", "3": "H"}
@@ -316,3 +316,19 @@ def test_trophy_never_sits_on_the_bear() -> None:
     assert root.find(".//svg:text[@class='goal']", NS) is None
     root = _parse(render_svg(stages, _urls(stages), here_id=None))
     assert root.find(".//svg:text[@class='goal']", NS) is not None
+
+
+def test_scenery_never_sits_on_a_node_or_on_the_path(topics, tasks) -> None:
+    """景物只放在空格：離每個關卡、以及每兩關之間的小路都要有距離。"""
+    from core.map_art import FOCUS_COLUMNS, scenery_spots
+
+    for by_topic, cols in ((True, COLUMNS), (False, FOCUS_COLUMNS)):
+        stages = _real(topics, tasks)
+        placed, *_ = layout(stages, by_topic=by_topic)
+        spots = scenery_spots(placed, cols)
+        assert spots, "真實資料應該有空格可以放景物"
+        for x, y, _ in spots:
+            assert all(abs(p.x - x) > 40 or abs(p.y - y) > 30 for p in placed)
+            for a, b in zip(placed, placed[1:]):
+                if abs(a.y - y) < 1 and abs(b.y - y) < 1:  # 同一排的路段
+                    assert not (min(a.x, b.x) - 20 <= x <= max(a.x, b.x) + 20)
