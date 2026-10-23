@@ -19,6 +19,12 @@
 - 每一區的標題列有自己的裝飾（草原、森林、雪山），起點有城堡、終點有獎盃。
 - 重點題組的關卡右上角有一顆星（只在顯示整個題庫時畫，重點路線裡每關都是重點）。
 
+農村風格（同日第三輪，使用者給了參考圖：俯視的溫馨農村）：
+
+- 整張圖是一片有紋理的草地，各區之間用木頭圍籬分開（小路經過的地方留缺口），區名寫在木牌上。
+- 小路是寬的沙土路（深色路緣＋淺色路面）；空格放圍籬農田、麥田、小屋、池塘、樹叢——
+  圖形都在 ``core/farm_art.py``，原創向量圖形，光從左上來、影子往右下。
+
 立體感（同日第二輪，使用者要「更像遊戲、立體」）：
 
 - 關卡是**有厚度的圓台**：上面是關卡面，下面一圈較深的側邊，再下面是影子；滑鼠移上去會浮起來。
@@ -36,6 +42,7 @@ from dataclasses import dataclass
 from html import escape
 from urllib.parse import urlsplit
 
+from core import farm_art
 from core.game_map import Stage
 
 WIDTH = 640
@@ -76,21 +83,12 @@ INK = "#4A3728"
 #: 走過的路
 PATH_DONE = "#F2B84B"
 #: 關卡圓台的厚度（側邊露出來的高度）
-DEPTH = 6
+DEPTH = 8
 #: 路基比路面低多少
 ROAD_DEPTH = 5
 
 #: Boss 關（Hard）比一般關卡大多少
 BOSS_EXTRA = 4
-
-#: 空格裡的景物（依區輪流用）。只放在「這一排沒有關卡、小路也不會經過」的格子。
-SCENERY: dict[int, tuple[str, ...]] = {
-    0: ("🌳", "🌷", "🪨", "🏡"),
-    1: ("🌻", "🌳", "🌾", "🪨"),
-    2: ("🌲", "🍄", "🌲", "🪵"),
-    3: ("🏔️", "⛄", "🌲", "❄️"),
-}
-
 
 def scenery_spots(placed: list[Placed], columns: tuple[float, ...]) -> list[tuple[float, float, int]]:
     """（x, y, 區號）：可以放景物的空格。
@@ -118,9 +116,6 @@ def scenery_spots(placed: list[Placed], columns: tuple[float, ...]) -> list[tupl
                 spots.append((c, y, members[0].stage.zone))
     return spots
 
-
-#: 每一區標題列的裝飾（只是畫面）。emoji 用 SVG 文字畫，不用外部圖檔。
-ZONE_DECOR: dict[int, str] = {0: "🏰", 1: "🌼 🌾 🌼", 2: "🌲 🍄 🌲", 3: "⛰️ ❄️ ⛰️"}
 
 
 def _shade(hex_color: str, factor: float) -> str:
@@ -265,6 +260,56 @@ def _curve_segments(points: list[tuple[float, float]]) -> list[str]:
     return segments
 
 
+def road_samples(points: list[tuple[float, float]], steps: int = 12) -> list[tuple[float, float]]:
+    """把整條小路（Catmull-Rom 曲線）取樣成一串點，用來檢查景物有沒有壓到路。"""
+    out: list[tuple[float, float]] = list(points[:1])
+    for i in range(len(points) - 1):
+        p0 = points[i - 1] if i > 0 else points[i]
+        p1, p2 = points[i], points[i + 1]
+        p3 = points[i + 2] if i + 2 < len(points) else p2
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        for k in range(1, steps + 1):
+            t = k / steps
+            a, b, c, d = (1 - t) ** 3, 3 * (1 - t) ** 2 * t, 3 * (1 - t) * t**2, t**3
+            out.append((
+                a * p1[0] + b * c1[0] + c * c2[0] + d * p2[0],
+                a * p1[1] + b * c1[1] + c * c2[1] + d * p2[1],
+            ))
+    return out
+
+
+#: 小景物離路中心、離關卡中心至少要多遠（路寬 20、關卡半徑最大 21＋厚度）
+ROAD_CLEARANCE = 22
+NODE_CLEARANCE = 34
+
+
+def filler_spots(
+    placed: list[Placed], bands: list[Band], columns: tuple[float, ...], here: Placed | None = None
+) -> list[tuple[float, float]]:
+    """兩排之間的草地上可以放小樹叢、花的位置：每兩欄中間、每兩排中間各試一個點，
+    離小路、關卡、區名那一列都夠遠才放。小熊站的位置也避開。"""
+    if not placed:
+        return []
+    road = road_samples([(p.x, p.y) for p in placed])
+    ys = sorted({p.y for p in placed})
+    candidates = [((a + b) / 2, (y1 + y2) / 2) for a, b in zip(columns, columns[1:])
+                  for y1, y2 in zip(ys, ys[1:])]
+    candidates += [(x, ys[0] - ROW_HEIGHT / 2) for x in columns]  # 最上面一排的上方
+    spots = []
+    for x, y in candidates:
+        if any(b.top <= y <= b.top + BAND_HEADER for b in bands):
+            continue  # 區名那一列留給木牌與圍籬
+        if min((x - rx) ** 2 + (y - ry) ** 2 for rx, ry in road) < ROAD_CLEARANCE**2:
+            continue
+        if any((x - p.x) ** 2 + (y - p.y) ** 2 < NODE_CLEARANCE**2 for p in placed):
+            continue
+        if here is not None and abs(x - (here.x - BEAR_OFFSET)) < 28 and abs(y - here.y) < 36:
+            continue
+        spots.append((x, y))
+    return spots
+
+
 def _smooth_path(points: list[tuple[float, float]]) -> str:
     """Catmull-Rom 轉三次貝茲，讓小路是圓滑的曲線而不是折線。"""
     if not points:
@@ -371,12 +416,14 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
             f'stroke="{ring}" stroke-width="3"/>'
         )
     # 圓台：側邊（較深）先畫，關卡面疊在上面，露出 DEPTH 的厚度
-    face, rim = (GOLD, "#E8A33A") if s.done else ("#FFFFFF", color)
+    face, rim = ("url(#faceDone)", "#E8A33A") if s.done else ("url(#faceOpen)", color)
     side = _shade(rim, 0.72)
     parts.append(
         f'<g class="platform">'
-        f'<circle cx="{x:.1f}" cy="{y + DEPTH:.1f}" r="{r}" fill="{side}"/>'
+        f'<circle cx="{x:.1f}" cy="{y + DEPTH:.1f}" r="{r}" fill="{_shade(side, 0.85)}"/>'
         f'<rect x="{x - r:.1f}" y="{y:.1f}" width="{2 * r}" height="{DEPTH}" fill="{side}"/>'
+        # 側邊上半段稍亮：圓柱面受光
+        f'<rect x="{x - r:.1f}" y="{y:.1f}" width="{r * 0.9:.1f}" height="{DEPTH}" fill="#FFFFFF" opacity="0.12"/>'
         f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{face}" stroke="{rim}" stroke-width="{4 if boss else 3}"/>'
         # 左上角的高光，讓關卡面看起來是亮面
         f'<ellipse cx="{x - r * 0.35:.1f}" cy="{y - r * 0.4:.1f}" rx="{r * 0.38:.1f}" ry="{r * 0.2:.1f}" '
@@ -394,6 +441,16 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
         parts.append(f'<text x="{x + r - 2:.1f}" y="{y - r + 6:.1f}" class="focus-star">⭐</text>')
     parts.append(f"</{tag}>")
     return "".join(parts)
+
+
+def _exit_gap(band: Band, placed: list[Placed]) -> tuple[float, float] | None:
+    """色帶上緣被小路穿過的 x 範圍（這一區最後一關 → 上一區第一關），圍籬要在這裡留缺口。"""
+    members = [p for p in placed if p.stage.zone == band.zone]
+    above = [p for p in placed if p.y < band.top]
+    if not (members and above):
+        return None
+    lo, hi = sorted((members[-1].x, above[0].x))
+    return lo - 30, hi + 30
 
 
 def _label_x(band: Band, placed: list[Placed], width: float) -> float:
@@ -440,12 +497,10 @@ def render_svg(
         f".topic{{font-size:11px;font-weight:600;fill:{INK}}}"
         f".topic-count{{font-size:10px;fill:{INK};opacity:0.7}}"
         ".mark{font-size:13px;font-weight:800;text-anchor:middle}"
-        ".zone{font-size:14px;font-weight:700;fill:#fff;text-anchor:middle}"
+        ".zone{font-size:14px;font-weight:700;fill:#FFF6E0;text-anchor:middle}"
         ".crown{font-size:12px;text-anchor:middle;pointer-events:none}"
         ".focus-star{font-size:10px;text-anchor:middle;pointer-events:none}"
-        ".decor{font-size:16px;text-anchor:middle;pointer-events:none;opacity:0.9}"
         ".goal{font-size:22px;text-anchor:middle;pointer-events:none}"
-        ".scenery{font-size:24px;text-anchor:middle;pointer-events:none}"
         ".stage{cursor:pointer}"
         # 滑鼠移上去，圓台浮起來（影子不動）
         ".stage .platform{transition:transform .15s ease-out}"
@@ -458,17 +513,18 @@ def render_svg(
         ".stage .platform{transition:none}}"
         "</style>",
     ]
-    # 每一區的地面漸層：上淡下濃，像往前延伸的地面
-    out.append("<defs>")
-    for b in bands:
-        _, bg, _ = zone_theme(b.zone)
-        out.append(
-            f'<linearGradient id="ground{b.zone}" x1="0" y1="0" x2="0" y2="1">'
-            f'<stop offset="0" stop-color="{_shade(bg, 1.12)}"/>'
-            f'<stop offset="1" stop-color="{_shade(bg, 0.86)}"/>'
-            "</linearGradient>"
-        )
-    out.append("</defs>")
+    out.append(
+        "<defs>"
+        + farm_art.grass_pattern("grass")
+        # 關卡面：中間亮、邊緣暗的放射漸層，看起來是微微鼓起的圓面
+        + '<radialGradient id="faceOpen" cx="0.38" cy="0.32" r="0.75">'
+        '<stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9DDC2"/></radialGradient>'
+        '<radialGradient id="faceDone" cx="0.38" cy="0.32" r="0.75">'
+        '<stop offset="0" stop-color="#FFEFA8"/><stop offset="1" stop-color="#E5A93A"/></radialGradient>'
+        "</defs>"
+    )
+    # 整張圖一片草地；每一區疊一層很淡的色調，分得出區又不搶戲
+    out.append(f'<rect x="0" y="0" width="{WIDTH}" height="{height:.0f}" fill="url(#grass)"/>')
 
     for b in bands:
         name, bg, accent = zone_theme(b.zone)
@@ -479,19 +535,41 @@ def render_svg(
         pill = 24 + len(label) * 13
         pill_x = _label_x(b, placed, pill)
         out.append(
-            f'<rect x="0" y="{b.top:.1f}" width="{WIDTH}" height="{b.bottom - b.top:.1f}" fill="url(#ground{b.zone})"/>'
-            # 下緣的懸崖邊：一層地形疊在下一層上面
-            f'<rect x="0" y="{b.bottom - 7:.1f}" width="{WIDTH}" height="7" fill="{_shade(accent, 0.8)}" opacity="0.45"/>'
-            # 區名做成有厚度的牌子
-            f'<rect x="{pill_x:.1f}" y="{b.top + 13:.1f}" rx="13" width="{pill}" height="26" fill="{_shade(accent, 0.7)}"/>'
-            f'<rect x="{pill_x:.1f}" y="{b.top + 10:.1f}" rx="13" width="{pill}" height="26" fill="{accent}"/>'
-            f'<text x="{pill_x + pill / 2:.1f}" y="{b.top + 28:.1f}" class="zone">{escape(label)}</text>'
+            f'<rect x="0" y="{b.top:.1f}" width="{WIDTH}" height="{b.bottom - b.top:.1f}" '
+            f'fill="{accent}" opacity="0.10"/>'
         )
-        # 裝飾緊貼在區名旁邊、朝地圖中間：區名本來就放在小路離開這一區的另一側
+        if by_topic:
+            # 左欄的主題名底下墊一條羊皮紙色，草地紋理上的字才讀得清楚
+            out.append(
+                f'<rect x="6" y="{b.top + BAND_HEADER - 4:.1f}" width="{GUTTER - 18}" '
+                f'height="{b.bottom - b.top - BAND_HEADER:.1f}" rx="8" fill="#F7EEDB" opacity="0.88"/>'
+            )
+        # 區與區之間的木頭圍籬，小路穿過的地方留缺口
+        if b.top > 0:
+            gap = _exit_gap(b, placed)
+            if gap is None:
+                out.append(farm_art.fence(8, WIDTH - 8, b.top + 4))
+            else:
+                lo, hi = gap
+                if lo > 24:
+                    out.append(farm_art.fence(8, lo, b.top + 4))
+                if hi < WIDTH - 24:
+                    out.append(farm_art.fence(hi, WIDTH - 8, b.top + 4))
+        # 區名寫在木牌上
+        out.append(
+            farm_art.sign(pill_x, b.top + 9, pill)
+            + f'<text x="{pill_x + pill / 2:.1f}" y="{b.top + 27:.1f}" class="zone">{escape(label)}</text>'
+        )
+        # 木牌旁邊放一小組景物（朝地圖中間）：區名本來就放在小路離開這一區的另一側
         # （_label_x），放在另一側會壓到往上走的那段路
-        decor = ZONE_DECOR.get(b.zone, ZONE_DECOR[max(ZONE_DECOR)])
         decor_x = pill_x + pill + 45 if pill_x < WIDTH / 2 else pill_x - 45
-        out.append(f'<text x="{decor_x:.1f}" y="{b.top + 30:.1f}" class="decor">{decor}</text>')
+        out.append(
+            f'<g class="decor" data-x="{decor_x:.1f}">'
+            + farm_art.tree(decor_x - 14, b.top + 34, 0.75)
+            + farm_art.bush(decor_x + 8, b.top + 32)
+            + farm_art.flowers(decor_x + 22, b.top + 26, seed=b.zone)
+            + "</g>"
+        )
 
     for lab in labels:
         lines = _wrap(lab.name)
@@ -505,30 +583,36 @@ def render_svg(
     points = [(p.x, p.y) for p in placed]
     path = _smooth_path(points)
     out.append(
-        # 路基：比路面低一點、深一點，看起來路是墊高的
-        f'<path d="{path}" fill="none" stroke="#B89A72" stroke-width="13" stroke-linecap="round" '
-        f'transform="translate(0,{ROAD_DEPTH})"/>'
-        f'<path d="{path}" fill="none" stroke="#D9C3A0" stroke-width="12" stroke-linecap="round"/>'
+        # 沙土路：往右下偏一點的深色路緣當影子，上面是寬的路面，中間一條踩出來的淺色
+        f'<path d="{path}" fill="none" stroke="{farm_art.DIRT_EDGE}" stroke-width="24" stroke-linecap="round" '
+        f'stroke-linejoin="round" transform="translate(1,{ROAD_DEPTH - 2})" opacity="0.9"/>'
+        f'<path d="{path}" fill="none" stroke="{farm_art.DIRT}" stroke-width="20" stroke-linecap="round" '
+        f'stroke-linejoin="round"/>'
     )
     # 走過的路：前後兩關都做完的那一段畫成金色（用整條路的同一段曲線，弧度才對得上）
     for (a, b), seg in zip(zip(placed, placed[1:]), _curve_segments(points)):
         if a.stage.done and b.stage.done:
             out.append(
                 f'<path class="walked" d="{seg}" fill="none" stroke="{PATH_DONE}" '
-                f'stroke-width="12" stroke-linecap="round"/>'
+                f'stroke-width="20" stroke-linecap="round"/>'
             )
     out.append(
-        f'<path d="{path}" fill="none" stroke="#FFF8EA" stroke-width="3" '
-        f'stroke-dasharray="2 9" stroke-linecap="round"/>'
+        f'<path d="{path}" fill="none" stroke="{farm_art.DIRT_LIGHT}" stroke-width="6" '
+        f'stroke-linecap="round" opacity="0.7"/>'
     )
 
     # 空格裡的景物：有影子的樹、石頭、花，讓盤面不空
     columns_used = FOCUS_COLUMNS if not by_topic else COLUMNS
     for i, (sx, sy, zone) in enumerate(scenery_spots(placed, columns_used)):
-        items = SCENERY.get(zone, SCENERY[max(SCENERY)])
+        out.append(farm_art.scenery_piece(i + zone, sx, sy))
+    # 兩排之間的草地：小樹叢、花、小樹輪流放
+    here_spot = next((p for p in placed if p.stage.task_id == here_id), None)
+    for i, (fx, fy) in enumerate(filler_spots(placed, bands, columns_used, here_spot)):
+        kind = i % 3
         out.append(
-            f'<ellipse cx="{sx:.1f}" cy="{sy + 10:.1f}" rx="13" ry="4" fill="#000" opacity="0.15"/>'
-            f'<text x="{sx:.1f}" y="{sy + 8:.1f}" class="scenery">{items[i % len(items)]}</text>'
+            farm_art.bush(fx, fy + 4) if kind == 0
+            else farm_art.flowers(fx, fy, seed=i) if kind == 1
+            else farm_art.tree(fx, fy + 6, 0.6)
         )
 
     if placed:

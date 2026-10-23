@@ -278,7 +278,7 @@ def test_zone_decoration_stays_clear_of_the_path_leaving_the_zone(topics, tasks)
     stages = _real(topics, tasks)
     placed, bands, _, _ = layout(stages)
     root = _parse(render_svg(stages, _urls(stages), None))
-    decors = [float(t.get("x")) for t in root.iterfind(".//svg:text[@class='decor']", NS)]
+    decors = [float(g.get("data-x")) for g in root.iterfind(".//svg:g[@class='decor']", NS)]
     for band, x in zip(sorted(bands, key=lambda b: -b.top), decors):
         members = [p for p in placed if p.stage.zone == band.zone]
         above = [p for p in placed if p.y < band.top]
@@ -332,3 +332,16 @@ def test_scenery_never_sits_on_a_node_or_on_the_path(topics, tasks) -> None:
             for a, b in zip(placed, placed[1:]):
                 if abs(a.y - y) < 1 and abs(b.y - y) < 1:  # 同一排的路段
                     assert not (min(a.x, b.x) - 20 <= x <= max(a.x, b.x) + 20)
+
+
+def test_filler_scenery_keeps_clear_of_road_nodes_and_headers(topics, tasks) -> None:
+    from core.map_art import FOCUS_COLUMNS, NODE_CLEARANCE, ROAD_CLEARANCE, filler_spots, road_samples
+
+    for by_topic, cols in ((True, COLUMNS), (False, FOCUS_COLUMNS)):
+        placed, bands, _, _ = layout(_real(topics, tasks), by_topic=by_topic)
+        spots = filler_spots(placed, bands, cols)
+        assert spots
+        road = road_samples([(p.x, p.y) for p in placed])
+        for x, y in spots:
+            assert min(((x - a) ** 2 + (y - b) ** 2) ** 0.5 for a, b in road) >= ROAD_CLEARANCE
+            assert all(((x - p.x) ** 2 + (y - p.y) ** 2) ** 0.5 >= NODE_CLEARANCE for p in placed)
