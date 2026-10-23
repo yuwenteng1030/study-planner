@@ -4,7 +4,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，192 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，214 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -41,7 +41,7 @@ Streamlit (app/)  →  core/  →  db/repositories.py  →  SQLite
 
 `core/` 是純函式：不碰資料庫、不發 HTTP、不呼叫 LLM，所以測試只需要傳字典。**換資料庫只改 `db/` 這一層。**
 
-四頁：`app/Home.py`（填條件、排計畫）、`app/pages/1_今日任務.py`（打勾、記時間、落後重排）、`app/pages/2_我的資料.py`（匯出、刪除）、`app/pages/3_學習地圖.py`（關卡圖：一關＝一題，一條由下往上的蜿蜒小路；點關卡在新分頁打開 HackerRank 題目，回來按「我 submit 過了」就破關，小熊走到下一關）。
+五頁：`app/Home.py`（填條件、排計畫）、`app/pages/1_今日任務.py`（打勾、記時間、落後重排）、`app/pages/2_我的資料.py`（匯出、刪除）、`app/pages/3_學習地圖.py`（關卡圖：一關＝一題，一條由下往上的蜿蜒小路；點關卡在新分頁打開 HackerRank 題目，回來按「我 submit 過了」就破關，小熊走到下一關）、`app/pages/4_回顧.py`（每週／每月完成率、最常落後的主題）。
 
 ## 設計決策
 
@@ -156,7 +156,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 python -m scripts.import_data      # 匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 192 個測試
+pytest -q                          # 214 個測試
 streamlit run app/Home.py
 ```
 
@@ -174,6 +174,8 @@ streamlit run app/Home.py
 | `tests/test_game_map.py` | 學習地圖：分區取最長前置鏈、題數不重不漏、換計畫進度不歸零、不算別人的 |
 | `tests/test_map_art.py` | 地圖插畫：每題一個連結、後面的區畫在上方、一排只屬一個主題、S 形折返、區名不壓在小路上、小熊不蓋住關卡、只放行 HackerRank 網址、文字跳脫 |
 | `tests/test_map_completion.py` | 地圖上的「我 submit 過了」：計畫內勾計畫項目、計畫外另存一筆、按兩次只記一次、取消要連舊計畫一起清、不存在的題目擋下 |
+| `tests/test_review.py` | 回顧：照原本的日子分期、還沒到的日子不算、砍掉的題目留在分母、四種落後訊號分開數、只有過期後被挪才算落後（用真的排程器測）、舊計畫沒輪到的題不進分母 |
+| `tests/test_key_points.py` | 主題重點必須是字串：YAML 沒加引號的冒號會變成 dict、匯入時擋下、舊資料照樣顯示得出來 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
 UI 冒煙測試不是裝飾：`pytest` 全綠、伺服器回 200、log 乾淨的情況下，打勾功能曾經是一個無窮迴圈——`st.rerun()` 用拋例外實作，而那個例外會讓外層的交易 rollback，於是每次重跑都再標記一次。只有真的去點那個 checkbox 才會發現。

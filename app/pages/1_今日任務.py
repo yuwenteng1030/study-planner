@@ -53,7 +53,7 @@ def main() -> None:
             prereq_closure=repo.load_prereq_closure(session),
         )
         if result.changed:
-            repo.apply_replan(session, plan, result)
+            repo.apply_replan(session, plan, result, today)
             session.flush()
             _report_replan(result)
 
@@ -191,7 +191,7 @@ def _render_item(session, item) -> None:
         if item.reason:
             st.info(item.reason, icon="💡")
         if item.key_points:
-            st.caption("重點：" + "、".join(item.key_points))
+            st.caption("重點：" + "、".join(repo.key_point_text(p) for p in item.key_points))
 
         # 實際分鐘數一律顯示，不是打勾之後才出現：
         # 要讓使用者先填再打勾，否則打勾的那一瞬間還沒有值可以記。

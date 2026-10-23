@@ -80,7 +80,7 @@
   prereq: [arrays, time_complexity]
   key_points:
     - 實務上一律用 sorted()／list.sort()，自己寫排序只為了面試解釋
-    - 多鍵排序用 key=lambda x: (a, b)；要反向就取負值
+    - "多鍵排序用 key=lambda x: (a, b)；要反向就取負值"
     - 穩定排序的意義：相同鍵的原始順序會保留
     - 排序常常只是前置動作，真正的解法在排序之後
 

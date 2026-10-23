@@ -65,6 +65,21 @@ def _check_topic_graph(topics: list[dict]) -> None:
                 raise ValueError(f"主題 {topic['id']} 的前置 {prereq!r} 不存在")
 
 
+def _check_key_points(topics: list[dict]) -> None:
+    """每一條重點都必須是字串。
+
+    YAML 裡沒加引號、中間有「冒號＋空白」的一行（``key=lambda x: (a, b)``）
+    會被讀成 dict，不會報錯。它一路進到資料庫與計畫項目的快照，最後在今日任務頁
+    ``"、".join(...)`` 的那一刻才炸——而且炸在交易裡，連重排與打勾都一起被 rollback。
+    """
+    for topic in topics:
+        for point in topic.get("key_points") or []:
+            if not isinstance(point, str):
+                raise ValueError(
+                    f"主題 {topic['id']} 的重點不是字串（YAML 裡有冒號的那行要加引號）：{point!r}"
+                )
+
+
 def _check_task_urls(tasks: list[dict]) -> None:
     """題目的 url 必須是乾淨的 http(s) 絕對網址。
 
@@ -95,6 +110,7 @@ def import_all(reset: bool = False) -> dict[str, int]:
     topics = load_topics()
     tasks = load_tasks()
     _check_topic_graph(topics)
+    _check_key_points(topics)
     _check_task_urls(tasks)
 
     topic_ids = {t["id"] for t in topics}

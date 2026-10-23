@@ -21,6 +21,7 @@ HOME = str(PROJECT_ROOT / "app" / "Home.py")
 TODAY_PAGE = str(PROJECT_ROOT / "app" / "pages" / "1_今日任務.py")
 DATA_PAGE = str(PROJECT_ROOT / "app" / "pages" / "2_我的資料.py")
 MAP_PAGE = str(PROJECT_ROOT / "app" / "pages" / "3_學習地圖.py")
+REVIEW_PAGE = str(PROJECT_ROOT / "app" / "pages" / "4_回顧.py")
 
 TIMEOUT = 60
 
@@ -217,6 +218,23 @@ def test_new_plan_skips_tasks_already_done(seeded_app_db) -> None:
     assert not planned & done, f"做過的題目又被排進來：{sorted(planned & done)}"
 
 
+def test_review_page_shows_trend_and_switches_to_months(seeded_app_db) -> None:
+    """回顧頁：有計畫時要畫出趨勢圖與三個數字，切到「每月」也不能炸。"""
+    home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    home.number_input[0].set_value(10)
+    home.number_input[1].set_value(1.0)
+    home.button[0].click().run()
+    assert not home.exception
+
+    app = AppTest.from_file(REVIEW_PAGE, default_timeout=TIMEOUT).run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+    assert [m.label for m in app.metric] == ["本週完成率", "計畫裡做完的題目", "計畫外完成"]
+    assert app.get("vega_lite_chart"), "應該畫出趨勢圖"
+
+    app.radio[0].set_value("每月").run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+
+
 def test_overlapping_self_assessment_is_rejected(seeded_app_db) -> None:
     """同一主題同時選「已熟」和「沒學過」要被擋下來，不能默默取其一。"""
     app = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
@@ -369,3 +387,18 @@ def test_clearing_records_through_the_page(seeded_app_db) -> None:
     again.button[0].click().run()
     assert not again.exception, [str(e.value) for e in again.exception]
     assert again.success
+
+
+def test_review_page_without_any_plan(seeded_app_db) -> None:
+    """沒有任何計畫時給下一步指示，不能炸。
+
+    自己先清空使用者資料；放在檔案最後，因為測試資料庫是整個檔案共用的。
+    """
+    from db import repositories as repo
+    from db.session import session_scope
+
+    with session_scope() as session:
+        repo.delete_user_data(session, 1)
+    app = AppTest.from_file(REVIEW_PAGE, default_timeout=TIMEOUT).run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+    assert app.info, "應該提示先去排計畫"

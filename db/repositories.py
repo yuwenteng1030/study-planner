@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 from core.planner import Plan as CorePlan
 from core.planner import ScheduledItem, TaskInput, TopicNode
 from core.replanner import Replan
+from core.review import ItemRecord
 from core.scoring import UserContext
 from db.models import Plan, PlanItem, ProgressEvent, Task, TaskCompletion, Topic, User
 
@@ -80,10 +81,22 @@ def load_prereq_closure(session: Session) -> dict[str, frozenset[str]]:
     return _prereq_closure(load_topic_nodes(session))
 
 
+def key_point_text(point: object) -> str:
+    """一條重點轉成要顯示的文字。
+
+    2026-10-23 之前的 ``topics.yaml`` 有一行沒加引號，被讀成 ``{"前半": "後半"}``；
+    已經匯入的資料庫與計畫項目的快照裡都還留著它。這裡把它接回「前半: 後半」，
+    不去改使用者的資料庫。新的匯入由 ``scripts/import_data._check_key_points`` 擋下。
+    """
+    if isinstance(point, dict):
+        return "；".join(f"{k}: {v}" for k, v in point.items())
+    return str(point)
+
+
 def load_topic_key_points(session: Session) -> dict[str, list[str]]:
     """主題 id → 重點提示。寫入 ``plan_items`` 時當快照用。"""
     rows = session.scalars(select(Topic)).all()
-    return {row.id: list(row.key_points or ()) for row in rows}
+    return {row.id: [key_point_text(p) for p in row.key_points or ()] for row in rows}
 
 
 def load_task_static_notes(session: Session) -> dict[int, str | None]:
@@ -332,7 +345,9 @@ def mark_task_undone_for_user(session: Session, user_id: int, task_id: int) -> i
     return len(items) + removed
 
 
-def apply_replan(session: Session, plan: Plan, result: Replan) -> None:
+def apply_replan(
+    session: Session, plan: Plan, result: Replan, today: _dt.date | None = None
+) -> None:
     """把重排結果寫回資料庫。
 
     被砍掉的項目標成 ``skipped`` 而不是刪掉——刪掉就看不出「計畫曾經包含它」，
@@ -343,9 +358,24 @@ def apply_replan(session: Session, plan: Plan, result: Replan) -> None:
 
     by_task = {i.task_id: i for i in plan.items}
 
+    # 往後挪的題目要記在事件裡：下面那行會直接改寫 scheduled_date，不記下來，
+    # 回顧頁就不知道它原本排在哪一週，也不知道「這一題被拖過」。
+    # ``overdue`` 區分兩種挪動：原本的日子已經過了（自己落後）與只是被前面的題
+    # 擠到後面——重排會把所有待做的題重新裝填，一題過期，後面每一題都會跟著挪。
+    today = today or _dt.date.today()
+    moved = []
     for new_item in result.items:
         row = by_task.get(new_item.task_id)
         if row is not None:
+            if new_item.scheduled_date > row.scheduled_date:
+                moved.append(
+                    {
+                        "task_id": row.task_id,
+                        "from": row.scheduled_date.isoformat(),
+                        "to": new_item.scheduled_date.isoformat(),
+                        "overdue": row.scheduled_date < today,
+                    }
+                )
             row.scheduled_date = new_item.scheduled_date
             row.order_in_day = new_item.order_in_day
 
@@ -364,6 +394,7 @@ def apply_replan(session: Session, plan: Plan, result: Replan) -> None:
         "replan",
         payload={
             "rescheduled": len(result.items),
+            "moved": moved,
             "culled": [{"task_id": tid, "reason": r} for tid, r in result.culled],
             "overflow_minutes": result.overflow_minutes,
         },
@@ -427,6 +458,99 @@ def progress_summary(plan: Plan, today: _dt.date) -> dict:
         "today_minutes": sum(i.task.est_minutes for i in today_items),
         "skipped": sum(1 for i in plan.items if i.status == "skipped"),
     }
+
+
+def _local_date(stamp: _dt.datetime) -> _dt.date:
+    """``server_default=func.now()`` 的時間：SQLite 存的是 UTC，換成本機日期。
+
+    排定日期、完成時間（``datetime.now()``）都是本機時間；不換的話，台灣早上
+    八點前排的新計畫，舊計畫會被當成前一天就收起來。
+    """
+    return stamp.replace(tzinfo=_dt.timezone.utc).astimezone().date()
+
+
+def load_review_data(
+    session: Session, user_id: int
+) -> tuple[list[ItemRecord], set[int], set[int]]:
+    """回顧頁要的資料：（所有計畫的項目, 過期後被往後挪的題目, 計畫外完成的題目）。
+
+    跨所有計畫，包含已收起來的——回顧看的是歷史，不是現在這一份。
+
+    **原本的日期從重排事件還原。** 重排會直接改寫 ``scheduled_date``；每一次往後挪
+    都記在事件的 ``moved`` 裡，所以一題最早的 ``from`` 就是它原本排定的日子。
+    2026-10-23 之前的重排事件沒有 ``moved``，那之前的挪動還原不了，照現在的日期算。
+
+    **已收起來的計畫，只留收起來之前就該做的題。** 排新計畫時舊的那份被收起來，
+    它排在未來的題目從來沒有輪到過，算進分母會讓之後幾週的完成率莫名其妙地減半。
+    收起來的時間＝下一份計畫建立的日子（目前只有「排新計畫」會收起舊計畫；
+    之後若加「結束計畫」，要另外記收起來的日子）。
+
+    「過期後被挪」以題目為單位：同一題在任何一份計畫裡過期被挪過，就算挪過。
+    """
+    plans = session.execute(
+        select(Plan.id, Plan.status, Plan.created_at)
+        .where(Plan.user_id == user_id)
+        .order_by(Plan.created_at, Plan.id)
+    ).all()
+    archived_on: dict[int, _dt.date] = {}
+    for (plan_id, status, _), nxt in zip(plans, plans[1:]):
+        if status != "active":
+            archived_on[plan_id] = _local_date(nxt.created_at)
+    active_ids = {plan_id for plan_id, status, _ in plans if status == "active"}
+
+    # (plan_id, task_id) → 最早的原始日期；過期後才被挪的題目
+    original: dict[tuple[int, int], _dt.date] = {}
+    moved_overdue: set[int] = set()
+    events = session.execute(
+        select(ProgressEvent.plan_id, ProgressEvent.payload, ProgressEvent.created_at).where(
+            ProgressEvent.user_id == user_id, ProgressEvent.event == "replan"
+        )
+    )
+    for plan_id, payload, created_at in events:
+        for entry in (payload or {}).get("moved", []):
+            if not isinstance(entry, dict) or not isinstance(entry.get("task_id"), int):
+                continue
+            try:
+                start = _dt.date.fromisoformat(entry["from"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            key = (plan_id, entry["task_id"])
+            if key not in original or start < original[key]:
+                original[key] = start
+            if entry.get("overdue", start < _local_date(created_at)):
+                moved_overdue.add(entry["task_id"])
+
+    rows = session.execute(
+        select(
+            PlanItem.plan_id, PlanItem.task_id, Task.topic_id,
+            PlanItem.scheduled_date, PlanItem.status, PlanItem.done_at,
+        )
+        .join(Plan, PlanItem.plan_id == Plan.id)
+        .join(Task, PlanItem.task_id == Task.id)
+        .where(Plan.user_id == user_id)
+    )
+    items: list[ItemRecord] = []
+    for plan_id, task_id, topic_id, current, status, done_at in rows:
+        first = original.get((plan_id, task_id), current)
+        cutoff = archived_on.get(plan_id)
+        if cutoff is not None and status != "done" and first >= cutoff:
+            continue  # 舊計畫裡還沒輪到就被收起來的題
+        items.append(
+            ItemRecord(
+                task_id=task_id,
+                topic_id=topic_id,
+                scheduled_date=first,
+                status=status,
+                done_on=done_at.date() if done_at else None,
+                current_date=current,
+                active=plan_id in active_ids,
+            )
+        )
+
+    extra = set(
+        session.scalars(select(TaskCompletion.task_id).where(TaskCompletion.user_id == user_id))
+    )
+    return items, moved_overdue, extra
 
 
 # ---------------------------------------------------------------------------
