@@ -17,9 +17,11 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from api.deps import get_current_user  # noqa: E402
+from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from core.replanner import replan  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
+from llm.client import encourage  # noqa: E402
 
 st.set_page_config(page_title="今日任務", page_icon="✅", layout="centered")
 
@@ -27,7 +29,61 @@ TIER_LABEL = {"must": "必學", "recommended": "建議", "bonus": "加分"}
 TIER_ICON = {"must": "🔴", "recommended": "🟡", "bonus": "⚪"}
 
 
+#: 這一輪要說的鼓勵：打勾時（交易裡）只記下內容，交易結束後才去問 Claude，
+#: 免得等網路時一直抓著 SQLite 的寫入鎖。存在 session_state 而不是模組變數：
+#: Streamlit 每個分頁一條執行緒、共用同一個模組，模組變數會讓兩個分頁拿到彼此的鼓勵。
+PENDING_CHEERS_KEY = "_pending_cheers"
+
+
+def _cheer(item) -> None:
+    """打勾的那一刻記下要說的鼓勵。只在完成的這一輪生成一次，不是每次重跑都呼叫。
+
+    有 API key 就由 Claude 寫，沒有、失敗或超過每日額度就用範本
+    （``core/encouragement.py``）；Claude 寫的會標出來。實際生成在 ``_flush_cheers``。
+    """
+    same_day = [
+        i for i in item.plan.items
+        if i.scheduled_date == item.scheduled_date and i.status != "skipped"
+    ]
+    cheer = Cheer(
+        title=item.task.title,
+        topic_name=item.task.topic.name,
+        difficulty=item.task.difficulty,
+        est_minutes=item.task.est_minutes,
+        # 沒改過的話這一欄就是預估值：當成「實際」告訴 Claude 等於捏造一個準時的事實
+        actual_minutes=item.actual_minutes if item.actual_minutes != item.task.est_minutes else None,
+        today_done=sum(1 for i in same_day if i.status == "done"),
+        today_total=len(same_day),
+    )
+    st.session_state.setdefault(PENDING_CHEERS_KEY, []).append(
+        (cheer, item.plan.user_id, item.plan.user.daily_api_quota)
+    )
+
+
+def _safe_cheer(item) -> None:
+    """``_cheer`` 在交易裡跑：它出錯不能讓交易 rollback，把剛打的勾一起收回。"""
+    try:
+        _cheer(item)
+    except Exception:
+        pass
+
+
+def _flush_cheers() -> None:
+    pending = st.session_state.pop(PENDING_CHEERS_KEY, [])
+    for cheer, user_id, quota in pending:
+        message = encourage(cheer, template_message(cheer), user_id=user_id, quota=quota)
+        st.toast(toast_text(message.text) + ("　✨ Claude" if message.is_generated else ""), icon="🎉")
+
+
 def main() -> None:
+    st.session_state.pop(PENDING_CHEERS_KEY, None)
+    _render_page()
+    # 交易已經 commit 才問 Claude；_render_page 出錯（交易 rollback）就不恭喜，
+    # 沒送出的鼓勵在下次執行開頭被清掉
+    _flush_cheers()
+
+
+def _render_page() -> None:
     st.title("✅ 今日任務")
     today = _dt.date.today()
     user_id = get_current_user()
@@ -174,6 +230,7 @@ def _render_item(session, item) -> None:
                 item,
                 actual_minutes=int(recorded) if recorded is not None else None,
             )
+            _safe_cheer(item)
         elif not checked and item.status == "done":
             repo.mark_item_undone(session, item)
 

@@ -33,3 +33,7 @@ htmlcov/
 
 # oh-my-claudecode 執行期狀態
 .omc/
+
+# Claude Code 的本機設定與 worktree（個人環境，不進公開 repo）
+.claude/settings.local.json
+.claude/worktrees/

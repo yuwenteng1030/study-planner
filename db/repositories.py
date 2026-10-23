@@ -74,6 +74,14 @@ def load_task_urls(session: Session) -> dict[int, str]:
     return {task_id: url for task_id, url in session.execute(select(Task.id, Task.url))}
 
 
+def load_task_brief(session: Session, task_id: int) -> tuple[str, str, str, int] | None:
+    """一題的（題名, 主題名, 難度, 預估分鐘）；不存在就回 ``None``。給鼓勵訊息用。"""
+    task = session.get(Task, task_id)
+    if task is None:
+        return None
+    return task.title, task.topic.name, task.difficulty, task.est_minutes
+
+
 def load_prereq_closure(session: Session) -> dict[str, frozenset[str]]:
     """主題 id → 遞移前置主題集合。供重排時保護前置用。"""
     from core.planner import _prereq_closure

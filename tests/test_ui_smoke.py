@@ -80,10 +80,14 @@ def test_checking_a_task_marks_it_done(seeded_app_db) -> None:
 
     page.checkbox[0].set_value(True).run()
     assert not page.exception, [str(e.value) for e in page.exception]
+    # 打勾的那一刻要說一句鼓勵；測試沒有 API key，所以是範本
+    assert page.toast, "打勾後應該跳出鼓勵訊息"
+    assert "Claude" not in page.toast[0].value
 
     after = AppTest.from_file(TODAY_PAGE, default_timeout=TIMEOUT).run()
     assert not after.exception
     assert after.progress[1].value > before, "整體進度應該前進"
+    assert not after.toast, "鼓勵只在打勾的那一輪出現，重新打開不該再跳"
 
 
 def test_progress_moves_in_the_same_run_as_the_click(seeded_app_db) -> None:
@@ -157,6 +161,7 @@ def test_submit_button_clears_the_level_and_moves_the_bear(seeded_app_db) -> Non
     assert not app.exception, [str(e.value) for e in app.exception]
 
     assert _map_done(app) == before_done + 1
+    assert app.toast, "破關後應該跳出鼓勵訊息"
     data = _map_data(app)
     assert data["here"] != before_here
     assert f'data-task="{before_here}"' in data["svg"]

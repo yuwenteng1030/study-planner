@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import datetime as _dt
 import re
 import sys
 from pathlib import Path
@@ -21,10 +22,12 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from api.deps import get_current_user  # noqa: E402
+from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from core.game_map import Stage, build_map, build_stages, next_stage, parse_map_action  # noqa: E402
 from core.map_art import render_svg, safe_url, zone_theme  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
+from llm.client import encourage  # noqa: E402
 
 st.set_page_config(page_title="學習地圖", page_icon="🗺️", layout="centered")
 
@@ -32,6 +35,7 @@ MAP_KEY = "level_map"
 FOCUS_KEY = "map_focus"  # 小卡開在哪一關（task_id）；"next" 表示破關後跳到下一關
 CLEARED_KEY = "map_cleared"  # 剛破關的題名，給小卡說一聲「過關」
 ERROR_KEY = "map_error"
+CHEER_KEY = "map_cheer"  # 破關的鼓勵訊息，下一輪用 toast 顯示一次
 
 # 地圖用 st.components.v2 直接放進頁面：st.html 的 DOMPurify 會把整段 SVG 濾掉，
 # st.image 又點不到。v2 元件不經過消毒，所以 SVG 裡的文字一律在 core/map_art.py
@@ -162,14 +166,44 @@ _level_map = st.components.v2.component("level_map", html="", css=_MAP_CSS, js=_
 
 
 def _mark_done(task_id: int, title: str) -> None:
+    user_id = get_current_user()
+    cheer = None
     try:
         with session_scope() as session:
-            repo.mark_task_done_for_user(session, get_current_user(), task_id)
+            where = repo.mark_task_done_for_user(session, user_id, task_id)
+            if where != "already":
+                try:
+                    cheer, quota = _cheer_inputs(session, user_id, task_id, title, where)
+                except Exception:
+                    # 鼓勵是附加的：算它出錯不能讓這個交易 rollback、把破關一起收回
+                    cheer = None
     except LookupError:
         st.session_state[ERROR_KEY] = "找不到這一題，可能題庫剛更新過。重新整理再試一次。"
         return
     st.session_state[FOCUS_KEY] = "next"
     st.session_state[CLEARED_KEY] = title
+    if cheer is not None:
+        # 交易已經 commit 才問 Claude：等網路時不能抓著 SQLite 的寫入鎖
+        message = encourage(cheer, template_message(cheer), user_id=user_id, quota=quota)
+        st.session_state[CHEER_KEY] = toast_text(message.text) + ("　✨ Claude" if message.is_generated else "")
+
+
+def _cheer_inputs(session, user_id: int, task_id: int, title: str, where: str) -> tuple[Cheer, int]:
+    """破關的鼓勵訊息要的資料。題目在今天的計畫裡就帶上今天的進度。"""
+    # 從資料庫查，不靠 session_state：callback 可能比 main() 先跑（例如伺服器剛重開）
+    _, topic_name, difficulty, est = repo.load_task_brief(session, task_id) or (title, "", "", None)
+    today_done = today_total = None
+    if where == "plan":
+        session.flush()
+        plan = repo.load_active_plan(session, user_id)
+        if plan is not None:
+            summary = repo.progress_summary(plan, _dt.date.today())
+            today_done, today_total = summary["today_done"], summary["today_total"]
+    cheer = Cheer(
+        title=title, topic_name=topic_name, difficulty=difficulty, est_minutes=est,
+        today_done=today_done, today_total=today_total,
+    )
+    return cheer, repo.ensure_user(session, user_id).daily_api_quota
 
 
 def _mark_undone(task_id: int) -> None:
@@ -230,6 +264,8 @@ def main() -> None:
     st.session_state["_map_titles"] = {s.task_id: s.title for s in stages}
     here = next_stage(stages)
 
+    if cheer := st.session_state.pop(CHEER_KEY, None):
+        st.toast(cheer, icon="🎉")
     if error := st.session_state.pop(ERROR_KEY, None):
         st.error(error)
 
