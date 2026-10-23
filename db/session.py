@@ -161,10 +161,23 @@ def _sync_catalog() -> None:
     from db.models import Task
     from scripts.import_data import upsert_catalog
 
-    with SessionLocal() as session, session.begin():
-        empty = not session.scalar(select(func.count()).select_from(Task))
-        if empty or is_demo():
-            upsert_catalog(session)
+    from sqlalchemy.exc import IntegrityError, OperationalError
+
+    for attempt in range(2):
+        try:
+            with SessionLocal() as session, session.begin():
+                empty = not session.scalar(select(func.count()).select_from(Task))
+                if empty or is_demo():
+                    upsert_catalog(session)
+            return
+        except (IntegrityError, OperationalError):
+            # 兩個行程同時從空資料庫啟動：另一個剛好先寫進同一批主題（撞主鍵）或還抓著寫入鎖。
+            # 等一下重來一次；那時題庫多半已經在了，upsert 只會更新、不會再插入
+            if attempt == 1:
+                raise
+            import time
+
+            time.sleep(0.5)
 
 
 @contextmanager

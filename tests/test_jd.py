@@ -47,6 +47,11 @@ def test_quote_is_the_original_sentence_and_points_at_the_keyword() -> None:
         ("Live on Main Street", "trees"),
         ("cheap and fast", "heaps"),
         ("JavaScript developer", "python_basic"),
+        ("Our tech-stack is modern", "stacks_queues"),
+        ("ELK stack monitoring", "stacks_queues"),
+        ("Kafka queue systems", "stacks_queues"),
+        ("a wide array of tools", "arrays"),
+        ("decision trees and random forests", "trees"),
     ],
 )
 def test_words_that_only_look_like_a_topic_do_not_count(text, topic) -> None:
@@ -63,6 +68,10 @@ def test_words_that_only_look_like_a_topic_do_not_count(text, topic) -> None:
         ("熟悉動態規劃", "dp_2d"),
         ("priority queue", "heaps"),
         ("矩陣運算", "two_d_arrays"),
+        ("Python3 scripting", "python_basic"),
+        ("linked-list and two-pointer tricks", "linked_lists"),
+        ("two-pointer tricks", "arrays"),
+        ("熟悉堆積", "heaps"),
     ],
 )
 def test_explicit_words_count(text, topic) -> None:
@@ -81,8 +90,16 @@ def test_skills_outside_the_bank_are_listed_separately() -> None:
     assert a.other_skills["C／C++"].keyword == "C++", "單獨的 C 不算"
 
 
+def test_proper_noun_skills_are_case_sensitive() -> None:
+    a = analyze("Please react quickly; spring 招募開始。")
+    assert "前端" not in a.other_skills and "Java／C#／.NET" not in a.other_skills
+    assert "Java／C#／.NET" in analyze("ASP.NET Core").other_skills
+
+
 def test_bullets_are_stripped_but_numbers_in_text_are_kept() -> None:
-    assert sentences("- 熟悉 Python\n1. 會 SQL\n3+ years of Python") == ["熟悉 Python", "會 SQL", "3+ years of Python"]
+    assert sentences("- 熟悉 Python\n1. 會 SQL\n3+ years of Python\n3.5 年以上 Python 經驗") == [
+        "熟悉 Python", "會 SQL", "3+ years of Python", "3.5 年以上 Python 經驗"
+    ], "引用必須是原文：3.5 年不能變成 5 年"
 
 
 def test_long_sentence_is_clipped_around_the_keyword() -> None:
@@ -200,6 +217,7 @@ def test_jd_page_saves_and_shows_citations(seeded_app_db) -> None:
     app.button[0].click().run()
     assert not app.exception, [str(e.value) for e in app.exception]
     assert app.success and "UI 測試職缺" in app.success[0].value
+    assert app.text_area[0].value == "", "存成功才清空表單"
     assert any("**binary search**" in m.value for m in app.markdown)
 
     # 刪掉它，頁面回到原本的樣子
@@ -208,6 +226,15 @@ def test_jd_page_saves_and_shows_citations(seeded_app_db) -> None:
         button.click().run()
         app.run()
     assert not app.exception
+
+
+def test_failed_save_keeps_what_was_pasted(seeded_app_db) -> None:
+    app = AppTest.from_file(JD_PAGE, default_timeout=60).run()
+    app.text_input[0].set_value("空的")
+    app.text_area[0].set_value("   ")
+    app.button[0].click().run()
+    assert app.error, "內容空白要擋下"
+    assert app.text_input[0].value == "空的", "存檔失敗不能把使用者填的東西清掉"
 
 
 def test_jd_page_renders_for_demo_visitors_with_sample_jds(monkeypatch, seeded_app_db) -> None:

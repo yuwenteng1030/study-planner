@@ -22,7 +22,7 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.deps import get_current_user, show_demo_notice  # noqa: E402
+from api.deps import get_current_user, is_demo, show_demo_notice  # noqa: E402
 from core import clock  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
@@ -131,14 +131,21 @@ def _show_delete(user_id: int) -> None:
         st.write(
             "連帳號那一列與貼上的 JD 一起刪掉。"
         )
-        st.info(
-            "目前這個版本沒有登入功能，身分固定是同一個人"
-            "（`api/deps.py` 的 `get_current_user()`）。"
-            "所以刪掉帳號之後再打開這一頁，會自動建立一個全新的空帳號——"
-            "「刪除帳號」在單人模式下的意思是**回到全新狀態**，"
-            "不是「從此不能再用」。接上登入之後才會變成真正的註銷。",
-            icon="ℹ️",
-        )
+        if is_demo():
+            st.info(
+                "這是公開展示版的訪客帳號。刪掉之後，下一次點擊會拿到一個**新的訪客帳號**，"
+                "裡面同樣放著範例計畫與範例 JD。",
+                icon="ℹ️",
+            )
+        else:
+            st.info(
+                "目前這個版本沒有登入功能，身分固定是同一個人"
+                "（`api/deps.py` 的 `get_current_user()`）。"
+                "所以刪掉帳號之後再打開這一頁，會自動建立一個全新的空帳號——"
+                "「刪除帳號」在單人模式下的意思是**回到全新狀態**，"
+                "不是「從此不能再用」。接上登入之後才會變成真正的註銷。",
+                icon="ℹ️",
+            )
         _confirm_and_delete(
             user_id,
             drop_account=True,

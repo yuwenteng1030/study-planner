@@ -30,6 +30,10 @@ VISITOR_DOMAIN = "demo.invalid"
 #: 訪客帳號留多久。比一場面試加上回頭再看一次長，又不至於讓資料庫越長越大。
 VISITOR_TTL = _dt.timedelta(hours=12)
 
+#: 訪客帳號最多同時留幾個。超過就從最舊的開始刪：有人寫程式一直開新分頁，
+#: 資料庫也不會無限長大（每個訪客約 30 個計畫項目＋2 份 JD）。
+MAX_VISITORS = 300
+
 #: 範例計畫：開始於幾天前、共幾天、每天幾分鐘。
 #: 14 天 × 90 分鐘排得下全部 30 題重點題組、還有餘裕：漏掉的那一題挪到今天之後
 #: 不會超出期限。10 天 × 60 分鐘會排滿，訪客第一眼看到的是紅色的「時間不夠」。
@@ -77,7 +81,8 @@ def is_visitor(user: User) -> bool:
 
 def create_visitor(session: Session, today: _dt.date) -> int:
     """建一個訪客帳號並放好範例資料，回傳 user_id。"""
-    user = User(email=f"visitor-{uuid.uuid4().hex[:12]}@{VISITOR_DOMAIN}", display_name="訪客")
+    # 完整的 128 位元隨機碼：信箱就是訪客的身分憑證（見 api/deps.get_current_user），不能猜得到
+    user = User(email=f"visitor-{uuid.uuid4().hex}@{VISITOR_DOMAIN}", display_name="訪客")
     session.add(user)
     session.flush()
     for title, body in SAMPLE_JDS:
@@ -144,11 +149,19 @@ def seed_sample_progress(session: Session, user_id: int, today: _dt.date) -> Non
 
 
 def purge_stale_visitors(session: Session, now: _dt.datetime | None = None) -> int:
-    """刪掉超過 ``VISITOR_TTL`` 的訪客帳號（連同所有紀錄），回傳刪了幾個。"""
+    """刪掉超過 ``VISITOR_TTL`` 的訪客帳號（連同所有紀錄），回傳刪了幾個。
+
+    沒過期但總數已達 ``MAX_VISITORS`` 時，也從最舊的刪起，留一個位子給接著要建的新訪客。
+    """
     cutoff = (now or clock.utc_now()) - VISITOR_TTL
-    stale = session.scalars(
-        select(User.id).where(User.email.like(f"%@{VISITOR_DOMAIN}"), User.created_at < cutoff)
+    is_visitor_row = User.email.like(f"%@{VISITOR_DOMAIN}")
+    stale = list(session.scalars(select(User.id).where(is_visitor_row, User.created_at < cutoff)).all())
+    remaining = session.scalars(
+        select(User.id).where(is_visitor_row, User.created_at >= cutoff).order_by(User.created_at, User.id)
     ).all()
+    overflow = len(remaining) - (MAX_VISITORS - 1)
+    if overflow > 0:
+        stale += list(remaining[:overflow])
     for user_id in stale:
         repo.delete_user_data(session, user_id, drop_account=True)
     return len(stale)

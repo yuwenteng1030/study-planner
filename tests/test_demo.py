@@ -12,7 +12,7 @@ from streamlit.testing.v1 import AppTest
 
 from db import demo
 from db import repositories as repo
-from db.models import Base, PlanItem, Task, Topic, User
+from db.models import Base, Plan, Task, Topic, User
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TODAY = _dt.date(2026, 10, 24)
@@ -50,8 +50,14 @@ def test_two_visitors_do_not_share_data(db_session) -> None:
     a = demo.create_visitor(db_session, TODAY)
     b = demo.create_visitor(db_session, TODAY)
     assert a != b
+    plan_a = repo.load_active_plan(db_session, a)
+    plan_b = repo.load_active_plan(db_session, b)
+    assert plan_a.id != plan_b.id
+    assert not {i.id for i in plan_a.items} & {i.id for i in plan_b.items}
+    assert not {j.id for j in repo.load_jds(db_session, a)} & {j.id for j in repo.load_jds(db_session, b)}
     repo.delete_user_data(db_session, a, drop_account=True)
     assert repo.load_active_plan(db_session, b) is not None
+    assert len(repo.load_jds(db_session, b)) == len(demo.SAMPLE_JDS)
 
 
 def test_purge_removes_only_stale_visitors(db_session) -> None:
@@ -68,7 +74,8 @@ def test_purge_removes_only_stale_visitors(db_session) -> None:
     assert db_session.get(User, old) is None
     assert db_session.get(User, fresh) is not None
     assert db_session.get(User, 1) is not None, "非訪客帳號再舊也不能刪"
-    assert not db_session.scalars(select(PlanItem).join(PlanItem.plan).where(PlanItem.plan.has(user_id=old))).all()
+    assert repo.load_active_plan(db_session, fresh) is not None, "沒過期的訪客資料要留著"
+    assert not db_session.scalars(select(Plan).where(Plan.user_id == old)).all(), "過期訪客的計畫要一起刪"
 
 
 def test_demo_never_calls_claude_unless_explicitly_allowed(monkeypatch) -> None:
@@ -112,16 +119,55 @@ def test_every_page_renders_for_a_new_visitor(demo_env, page) -> None:
     app = AppTest.from_file(str(PROJECT_ROOT / "app" / page), default_timeout=60).run()
     assert not app.exception, [str(e.value) for e in app.exception]
     assert any("公開展示版" in i.value for i in app.sidebar.info)
-    visitor = app.session_state["visitor_user_id"]
-    assert visitor != 1, "展示版不能用到單人模式的帳號"
+    assert app.session_state["visitor_email"].endswith("@" + demo.VISITOR_DOMAIN), "展示版不能用到單人模式的帳號"
 
 
 def test_each_browser_session_is_a_different_visitor(demo_env) -> None:
     home = str(PROJECT_ROOT / "app" / "Home.py")
     a = AppTest.from_file(home, default_timeout=60).run()
     b = AppTest.from_file(home, default_timeout=60).run()
-    assert a.session_state["visitor_user_id"] != b.session_state["visitor_user_id"]
+    assert a.session_state["visitor_email"] != b.session_state["visitor_email"]
     # 同一個分頁再跑一次（切頁、按按鈕）還是同一個人
-    first = a.session_state["visitor_user_id"]
+    first = a.session_state["visitor_email"]
     a.run()
-    assert a.session_state["visitor_user_id"] == first
+    assert a.session_state["visitor_email"] == first
+
+
+def test_a_deleted_visitors_tab_never_lands_in_the_next_visitors_account(demo_env) -> None:
+    """SQLite 會把刪掉的最大 id 發給下一個新帳號。舊分頁要拿到新帳號，不能接手別人的。"""
+    from db.session import session_scope
+
+    home = str(PROJECT_ROOT / "app" / "Home.py")
+    a = AppTest.from_file(home, default_timeout=60).run()
+    a_email = a.session_state["visitor_email"]
+    with session_scope() as session:
+        a_id = session.scalar(select(User.id).where(User.email == a_email))
+        repo.delete_user_data(session, a_id, drop_account=True)
+
+    b = AppTest.from_file(home, default_timeout=60).run()
+    b_email = b.session_state["visitor_email"]
+    with session_scope() as session:
+        b_id = session.scalar(select(User.id).where(User.email == b_email))
+    assert b_id == a_id, "前提：id 真的被重複使用了（不成立的話這個測試沒在測東西）"
+
+    a.run()
+    assert not a.exception
+    assert a.session_state["visitor_email"] not in (a_email, b_email), "舊分頁要拿到一個全新的帳號"
+
+
+def test_visitor_count_is_capped(db_session, monkeypatch) -> None:
+    monkeypatch.setattr(demo, "MAX_VISITORS", 3)
+    ids = []
+    for _ in range(5):
+        demo.purge_stale_visitors(db_session)
+        ids.append(demo.create_visitor(db_session, TODAY))
+    alive = [i for i in ids if db_session.get(User, i) is not None]
+    assert len(alive) == 3
+    assert ids[-1] in alive, "最新的一定留著"
+
+
+def test_demo_does_not_silently_recreate_missing_accounts(db_session, monkeypatch) -> None:
+    """補建的帳號不在訪客網域，永遠不會被清掉。"""
+    monkeypatch.setenv("STUDY_PLANNER_DEMO", "1")
+    with pytest.raises(LookupError):
+        repo.ensure_user(db_session, 999)

@@ -56,11 +56,26 @@ def main() -> None:
     _show_saved(user_id, rows, topic_names)
 
 
+_TITLE_KEY = "jd_title"
+_BODY_KEY = "jd_body"
+_SAVED_KEY = "jd_saved_message"
+
+
 def _show_form(user_id: int) -> None:
-    with st.form("jd_form", clear_on_submit=True):
-        title = st.text_input("幫這份 JD 取個名字", max_chars=120, placeholder="例如：後端工程師 A")
+    # 不用 clear_on_submit：存檔失敗（例如已存滿）時表單也會被清空，貼了兩萬字的人會很想哭。
+    # 存成功才清：widget 畫出來之後不能改它的值，所以記一個旗標、重跑一輪，在畫之前清掉。
+    message = st.session_state.pop(_SAVED_KEY, None)
+    if message is not None:
+        st.session_state.pop(_TITLE_KEY, None)
+        st.session_state.pop(_BODY_KEY, None)
+        _show_saved_message(message)
+    with st.form("jd_form"):
+        title = st.text_input(
+            "幫這份 JD 取個名字", max_chars=120, placeholder="例如：後端工程師 A", key=_TITLE_KEY
+        )
         body = st.text_area(
-            "JD 內容", height=220, max_chars=MAX_JD_CHARS, placeholder="把職缺頁面上的工作內容與條件整段貼進來"
+            "JD 內容", height=220, max_chars=MAX_JD_CHARS, placeholder="把職缺頁面上的工作內容與條件整段貼進來",
+            key=_BODY_KEY,
         )
         submitted = st.form_submit_button("分析並儲存", type="primary")
     if not submitted:
@@ -73,10 +88,16 @@ def _show_form(user_id: int) -> None:
     except ValueError as exc:
         st.error(str(exc))
         return
+    st.session_state[_SAVED_KEY] = (saved_title, found)
+    st.rerun()
+
+
+def _show_saved_message(message) -> None:
+    saved_title, found = message
     if found:
-        st.success(f"已存「{saved_title}」：提到題庫裡的 {found} 個主題。下次排計畫就會參考它。")
+        st.success(f"已存「{md_escape(saved_title)}」：提到題庫裡的 {found} 個主題。下次排計畫就會參考它。")
     else:
-        st.warning(f"已存「{saved_title}」，但沒有比對到題庫裡的主題（可能都寫泛稱，例如「熟悉演算法」）。")
+        st.warning(f"已存「{md_escape(saved_title)}」，但沒有比對到題庫裡的主題（可能都寫泛稱，例如「熟悉演算法」）。")
 
 
 def _show_summary(rows, stats, topic_names: dict[str, str]) -> None:
@@ -120,7 +141,7 @@ def _show_saved(user_id: int, rows, topic_names: dict[str, str]) -> None:
     st.subheader("已存的 JD")
     for jd_id, title, body, created_at, analysis in rows:
         names = "、".join(topic_names.get(t, t) for t in analysis.topics) or "沒有比對到主題"
-        with st.expander(f"{title}（{created_at:%m/%d}）"):
+        with st.expander(f"{md_escape(title)}（{created_at:%m/%d}）"):
             st.caption(f"提到：{names}")
             st.text(body if len(body) <= 3000 else body[:3000] + "\n…")
             if st.button("刪掉這份 JD", key=f"del-jd-{jd_id}"):

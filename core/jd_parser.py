@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -30,9 +31,15 @@ MAX_JD_CHARS = 20_000
 QUOTE_CONTEXT = 60
 
 
-def _en(*words: str) -> tuple[str, ...]:
-    """英文詞：前後不能緊接英數字，避免 ``tree`` 比對到 ``street``、``heap`` 比對到 ``cheap``。"""
-    return tuple(rf"(?<![A-Za-z0-9]){w}(?![A-Za-z0-9])" for w in words)
+def _en(*words: str, case: bool = False) -> tuple[str, ...]:
+    """英文詞：前後不能緊接英數字，避免 ``tree`` 比對到 ``street``、``heap`` 比對到 ``cheap``。
+
+    詞裡的空白也接受連字號（``linked list``＝``linked-list``）。預設不分大小寫；
+    ``case=True`` 給專有名詞用：``React``、``Spring``、``AI`` 分大小寫，
+    「react quickly」「spring 招募」才不會被當成技能。
+    """
+    flag = "" if case else "(?i)"
+    return tuple(rf"{flag}(?<![A-Za-z0-9]){w.replace(' ', '[- ]')}(?![A-Za-z0-9])" for w in words)
 
 
 def _zh(*words: str) -> tuple[str, ...]:
@@ -41,26 +48,33 @@ def _zh(*words: str) -> tuple[str, ...]:
 
 #: 主題 → 會被算成「提到這個主題」的詞。只放明確的詞，理由見模組說明。
 TOPIC_PATTERNS: dict[str, tuple[str, ...]] = {
-    "python_basic": _en("python"),
-    "time_complexity": _en(r"time complexity", r"big[- ]?o", r"space complexity")
+    "python_basic": _en(r"python ?3?(?:\.\d+)?", r"python3"),
+    "time_complexity": _en(r"time complexity", r"big ?o", r"space complexity")
     + _zh("時間複雜度", "空間複雜度"),
-    "arrays": _en(r"arrays?", r"sliding window", r"two pointers?", r"prefix sums?") + _zh("陣列"),
+    # 單數 array 後面接 of 是「一系列」（a wide array of tools），不算
+    "arrays": _en(r"arrays", r"array(?! of)", r"sliding window", r"two pointers?", r"prefix sums?") + _zh("陣列"),
     "strings": _en(r"string manipulation", r"string processing", r"text processing", r"regex", r"regular expressions?")
     + _zh("字串處理", "字串", "文字處理", "正規表示式", "正則表達式"),
     "hashmaps": _en(r"hash ?maps?", r"hash tables?", r"hashing", r"dictionar(?:y|ies)") + _zh("雜湊", "哈希"),
     "sorting": _en(r"sorting", r"sort algorithms?") + _zh("排序"),
     "search": _en(r"binary search", r"search algorithms?") + _zh("二分搜尋", "二元搜尋", "搜尋演算法"),
     "greedy": _en(r"greedy") + _zh("貪婪", "貪心"),
-    # 「message queue」是訊息系統（Kafka、RabbitMQ），「tech/full stack」是技術棧，都不是資料結構
+    # 技術棧（tech stack、ELK stack、full-stack）與訊息系統（message queue、Kafka queue system）
+    # 都不是資料結構
     "stacks_queues": (
-        r"(?<![A-Za-z0-9])(?<!tech )(?<!full )(?<!full-)(?<!technology )stacks?(?![A-Za-z0-9-])",
-        r"(?<![A-Za-z0-9])(?<!message )(?<!task )(?<!job )queues?(?![A-Za-z0-9])",
+        r"(?i)(?<![A-Za-z0-9])(?<!tech )(?<!tech-)(?<!full )(?<!full-)(?<!technology )(?<!elk )(?<!software )"
+        r"stacks?(?![A-Za-z0-9-])(?! (?:overflow|developer|engineer))",
+        r"(?i)(?<![A-Za-z0-9])(?<!message )(?<!task )(?<!job )(?<!kafka )(?<!rabbitmq )(?<!work )"
+        r"queues?(?![A-Za-z0-9])(?! (?:systems?|services?))",
     )
     + _zh("堆疊", "佇列"),
     "linked_lists": _en(r"linked lists?") + _zh("鏈結串列", "鏈表"),
     "recursion": _en(r"recursion", r"recursive", r"backtracking") + _zh("遞迴", "回溯"),
-    "trees": _en(r"binary trees?", r"trees?", r"BST") + _zh("二元樹", "二叉樹", "樹狀結構"),
-    "heaps": _en(r"heaps?", r"priority queues?") + _zh("優先佇列"),
+    # decision tree 是機器學習模型，family tree、source tree 也不是資料結構
+    "trees": _en(r"binary trees?", r"BST")
+    + (r"(?i)(?<![A-Za-z0-9])(?<!decision )(?<!family )(?<!source )(?<!directory )trees?(?![A-Za-z0-9])",)
+    + _zh("二元樹", "二叉樹", "樹狀結構"),
+    "heaps": _en(r"heaps?", r"priority queues?") + _zh("優先佇列", "堆積"),
     "graphs": _en(r"graphs?", r"graph theory", r"BFS", r"DFS", r"shortest paths?") + _zh("圖論", "最短路徑"),
     "dp_1d": _en(r"dynamic programming") + _zh("動態規劃"),
     "dp_2d": _en(r"dynamic programming") + _zh("動態規劃"),
@@ -71,25 +85,26 @@ TOPIC_PATTERNS: dict[str, tuple[str, ...]] = {
 }
 
 #: 泛稱：每個主題都沾得上邊，算進任何一個都不公平，另外列出來。
-GENERIC_PATTERNS: tuple[str, ...] = _en(r"data structures?", r"algorithms?", r"DSA", r"leetcode", r"hackerrank", r"coding tests?") + _zh(
-    "資料結構", "演算法", "程式能力測驗", "上機考", "線上測驗"
-)
+GENERIC_PATTERNS: tuple[str, ...] = _en(
+    r"data structures?", r"algorithms?", r"DSA", r"leetcode", r"hackerrank", r"coding tests?"
+) + _zh("資料結構", "演算法", "程式能力測驗", "上機考", "線上測驗")
 
 #: JD 常見、但題庫沒有練到的技能。列出來讓使用者知道「刷題之外還要準備什麼」。
 OTHER_SKILLS: dict[str, tuple[str, ...]] = {
-    "SQL／資料庫": _en(r"SQL", r"MySQL", r"PostgreSQL", r"Oracle", r"MSSQL", r"databases?") + _zh("資料庫"),
-    "Linux／Shell": _en(r"Linux", r"Unix", r"shell", r"bash"),
+    "SQL／資料庫": _en(r"SQL", r"MySQL", r"PostgreSQL", r"MSSQL", r"databases?") + _en(r"Oracle", case=True) + _zh("資料庫"),
+    "Linux／Shell": _en(r"Linux", r"Unix", r"shell scripts?", r"bash"),
     "Git／版本控制": _en(r"git", r"GitHub", r"GitLab", r"version control") + _zh("版本控制"),
-    "Docker／Kubernetes": _en(r"docker", r"kubernetes", r"k8s", r"containers?") + _zh("容器"),
+    "Docker／Kubernetes": _en(r"docker", r"kubernetes", r"k8s") + _zh("容器"),
     "雲端": _en(r"AWS", r"Azure", r"GCP", r"cloud") + _zh("雲端"),
     "Web API": _en(r"REST(?:ful)?", r"APIs?", r"web services?", r"microservices?") + _zh("微服務"),
-    "前端": _en(r"JavaScript", r"TypeScript", r"React", r"Vue", r"Angular", r"HTML", r"CSS") + _zh("前端"),
-    "Java／C#／.NET": _en(r"Java", r"C#", r"\.NET", r"Spring"),
+    "前端": _en(r"JavaScript", r"TypeScript", r"HTML", r"CSS") + _en(r"React", r"Vue", r"Angular", case=True) + _zh("前端"),
+    "Java／C#／.NET": _en(r"Java", r"C#", r"Spring", r"\.NET", case=True) + (r"(?i)ASP\.NET",),
     # 單獨一個「C」太容易誤判（Plan C、C 棟），只認 C++ 與「C 語言」
-    "C／C++": _en(r"C\+\+", r"C(?= ?語言)"),
-    "AI／機器學習": _en(r"machine learning", r"deep learning", r"AI", r"LLM", r"NLP") + _zh("機器學習", "深度學習", "人工智慧"),
+    "C／C++": _en(r"C\+\+", r"C(?= ?語言)", case=True),
+    "AI／機器學習": _en(r"machine learning", r"deep learning") + _en(r"AI", r"LLMs?", r"NLP", case=True)
+    + _zh("機器學習", "深度學習", "人工智慧"),
     "資料分析": _en(r"pandas", r"data analysis", r"Power BI", r"Tableau", r"ETL") + _zh("資料分析", "數據分析"),
-    "英文": _en(r"English", r"TOEIC") + _zh("英文", "多益"),
+    "英文": _en(r"English", r"TOEIC", case=True) + _zh("英文", "多益"),
 }
 
 
@@ -114,7 +129,7 @@ class JDAnalysis:
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[。！？；!?;])|\n|(?<=\.)\s+")
 #: 行首的條列符號：「- 」「• 」「1. 」「(2)」「3、」。不能把數字整個吃掉，「3+ years」的 3 要留著。
-_BULLET = re.compile(r"^\s*(?:[\-–—•·*●▪◆◇○‧►>]+|\d+[.)、]|[（(]\d+[)）])\s*")
+_BULLET = re.compile(r"^\s*(?:[\-–—•·*●▪◆◇○‧►>]+|\d+[.)、](?!\d)|[（(]\d+[)）])\s*")
 
 
 def sentences(text: str) -> list[str]:
@@ -143,7 +158,7 @@ def _clip(sentence: str, start: int, end: int) -> Mention:
 
 def _first(patterns: Iterable[str], lines: list[str]) -> Mention | None:
     """依句子順序找第一個比對到的詞（同一句裡取最靠前的）。"""
-    compiled = [re.compile(p, re.IGNORECASE) for p in patterns]
+    compiled = [re.compile(p) for p in patterns]
     for line in lines:
         hits = [m for c in compiled if (m := c.search(line))]
         if hits:
@@ -152,14 +167,19 @@ def _first(patterns: Iterable[str], lines: list[str]) -> Mention | None:
     return None
 
 
+@functools.lru_cache(maxsize=512)
 def analyze(text: str) -> JDAnalysis:
-    """分析一份 JD。"""
+    """分析一份 JD。
+
+    結果依原文快取：Streamlit 每點一下就重跑整頁，同一份 JD 會被分析好幾次，
+    一份兩萬字約 50 毫秒，30 份就是 1.5 秒。呼叫端不能修改回傳的物件。
+    """
     lines = sentences(text)
     result = JDAnalysis()
     for topic_id, patterns in TOPIC_PATTERNS.items():
         if mention := _first(patterns, lines):
             result.topics[topic_id] = mention
-    compiled = [re.compile(p, re.IGNORECASE) for p in GENERIC_PATTERNS]
+    compiled = [re.compile(p) for p in GENERIC_PATTERNS]
     for line in lines:
         hits = [m for c in compiled if (m := c.search(line))]
         if hits:

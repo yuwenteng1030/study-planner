@@ -882,6 +882,12 @@ def ensure_user(session: Session, user_id: int) -> User:
     user = session.get(User, user_id)
     if user is not None:
         return user
+    from api.deps import is_demo
+
+    if is_demo():
+        # 展示版的帳號只能由 db/demo.create_visitor 建：在這裡補建的帳號信箱不是訪客網域，
+        # 永遠不會被清掉。訪客剛好在這一輪被清掉時，讓這一輪失敗，下一輪會拿到新帳號
+        raise LookupError(f"user_id={user_id} 不存在（展示版不自動補建帳號）")
     user = User(
         id=user_id,
         # email 是 NOT NULL + UNIQUE，必須給值。單人模式下沒有真的信箱可填。
