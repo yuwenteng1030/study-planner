@@ -227,14 +227,23 @@ def _bear(x: float, y: float) -> str:
     )
 
 
-def _node(p: Placed, url: str | None, is_here: bool) -> str:
+#: 今天排的關卡外圈（藍：Easy 題本身已經是綠框，綠圈會分不出來）與過期沒做的外圈（紅）。
+TODAY_RING = "#2F7FD1"
+OVERDUE_RING = "#D9534F"
+
+
+def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "") -> str:
     s = p.stage
     x, y = p.x, p.y
     letter, color = DIFFICULTY_MARK.get(s.difficulty, ("?", INK))
     status = "已完成" if s.done else "未完成"
-    tip = f"{s.title}（{s.difficulty}，{status}）"
+    when = {"today": "，今天的任務", "overdue": "，過期還沒做"}.get(plan_tag, "")
+    tip = f"{s.title}（{s.difficulty}，{status}{when}）"
 
-    classes = "stage" + (" done" if s.done else "") + (" here" if is_here else "")
+    classes = (
+        "stage" + (" done" if s.done else "") + (" here" if is_here else "")
+        + (f" {plan_tag}" if plan_tag else "")
+    )
     # 有網址就是真的 <a>：就算畫面的 JavaScript 沒跑起來，點下去照樣能開題目
     href = (
         f' href="{escape(url, quote=True)}" target="_blank" rel="noopener noreferrer"'
@@ -247,6 +256,12 @@ def _node(p: Placed, url: str | None, is_here: bool) -> str:
         f"<title>{escape(tip)}</title>",
         f'<circle cx="{x:.1f}" cy="{y + 3:.1f}" r="{NODE_R + 2}" fill="#000" opacity="0.10"/>',
     ]
+    if plan_tag:
+        ring = TODAY_RING if plan_tag == "today" else OVERDUE_RING
+        parts.append(
+            f'<circle class="plan-ring" cx="{x:.1f}" cy="{y:.1f}" r="{NODE_R + 4}" fill="none" '
+            f'stroke="{ring}" stroke-width="3"/>'
+        )
     if s.done:
         parts.append(
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{NODE_R}" fill="{GOLD}" stroke="#E8A33A" stroke-width="3"/>'
@@ -273,7 +288,13 @@ def _label_x(band: Band, placed: list[Placed], width: float) -> float:
     return WIDTH - 16 - width if exit_x < middle else GUTTER
 
 
-def render_svg(stages: list[Stage], urls: dict[int, str], here_id: int | None) -> str:
+def render_svg(
+    stages: list[Stage],
+    urls: dict[int, str],
+    here_id: int | None,
+    today_ids: frozenset[int] | set[int] = frozenset(),
+    overdue_ids: frozenset[int] | set[int] = frozenset(),
+) -> str:
     """整張地圖的 SVG 字串。寬度跟著容器縮放。
 
     ``here_id`` 是小熊站的關卡（通常是 ``next_stage``）。每一關都是 ``<a>``，
@@ -328,7 +349,9 @@ def render_svg(stages: list[Stage], urls: dict[int, str], here_id: int | None) -
     )
 
     for p in placed:
-        out.append(_node(p, safe_url(urls.get(p.stage.task_id)), p.stage.task_id == here_id))
+        tid = p.stage.task_id
+        tag = "today" if tid in today_ids else "overdue" if tid in overdue_ids else ""
+        out.append(_node(p, safe_url(urls.get(tid)), tid == here_id, tag))
 
     spot = next((p for p in placed if p.stage.task_id == here_id), None)
     if spot is not None:

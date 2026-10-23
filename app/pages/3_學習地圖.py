@@ -23,7 +23,7 @@ if str(_ROOT) not in sys.path:
 
 from api.deps import get_current_user  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
-from core.game_map import Stage, build_map, build_stages, next_stage, parse_map_action  # noqa: E402
+from core.game_map import Stage, bear_stage, build_map, build_stages, parse_map_action  # noqa: E402
 from core.map_art import render_svg, safe_url, zone_theme  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
@@ -250,6 +250,7 @@ def main() -> None:
         tasks = repo.load_task_inputs(session)
         urls = repo.load_task_urls(session)
         done_ids = repo.load_map_done_task_ids(session, get_current_user())
+        marks = repo.plan_marks(repo.load_active_plan(session, get_current_user()), _dt.date.today())
 
     if not tasks:
         st.info("還沒有題庫。先執行 `python -m scripts.import_data` 匯入題庫。")
@@ -262,7 +263,16 @@ def main() -> None:
         return
     by_id = {s.task_id: s for s in stages}
     st.session_state["_map_titles"] = {s.task_id: s.title for s in stages}
-    here = next_stage(stages)
+    here = bear_stage(stages, marks)
+    here_is_today = here is not None and here.task_id in marks.today
+
+    # 從「今日任務」的「在地圖上看」過來：?task=<id> 打開那一關的小卡（只用一次）
+    linked = st.query_params.get("task")
+    if linked is not None:
+        del st.query_params["task"]
+        if linked.isdigit() and int(linked) in by_id:
+            st.session_state[FOCUS_KEY] = int(linked)
+            st.session_state.pop(CLEARED_KEY, None)
 
     if cheer := st.session_state.pop(CHEER_KEY, None):
         st.toast(cheer, icon="🎉")
@@ -278,12 +288,21 @@ def main() -> None:
         st.session_state[FOCUS_KEY] = focus_id
     focus = by_id.get(focus_id) if isinstance(focus_id, int) else None
 
-    _render_next_panel(here, urls, all_done=done == len(stages))
+    _render_next_panel(here, urls, all_done=done == len(stages), today=here_is_today)
+    if marks.today or marks.overdue:
+        today_left = sum(1 for t in marks.today if t in by_id and not by_id[t].done)
+        st.caption(
+            f"🔵 藍圈＝今天的任務（還剩 {today_left} / {len(marks.today)} 題）"
+            + (f"　🔴 紅圈＝過期還沒做（{len(marks.overdue)} 題，到「今日任務」按重排）" if marks.overdue else "")
+        )
 
     _level_map(
         key=MAP_KEY,
         data={
-            "svg": render_svg(stages, urls, here.task_id if here else None),
+            "svg": render_svg(
+                stages, urls, here.task_id if here else None,
+                today_ids=frozenset(marks.today), overdue_ids=marks.overdue,
+            ),
             "here": here.task_id if here else None,
             "focus": _focus_payload(focus, urls) if focus else None,
         },
@@ -339,7 +358,9 @@ def _focus_payload(stage: Stage, urls: dict[int, str]) -> dict:
     }
 
 
-def _render_next_panel(here: Stage | None, urls: dict[int, str], *, all_done: bool) -> None:
+def _render_next_panel(
+    here: Stage | None, urls: dict[int, str], *, all_done: bool, today: bool = False
+) -> None:
     """地圖很長，所以「下一關」在最上面也放一份：手機上不必捲到小熊那裡。"""
     with st.container(border=True):
         if here is None:
@@ -347,7 +368,8 @@ def _render_next_panel(here: Stage | None, urls: dict[int, str], *, all_done: bo
         if all_done:
             st.markdown("🏆 **全部破關！** 每一題都做完了。")
             return
-        st.markdown(f"🐻 **下一關**：{_md(here.title)}")
+        label = "今天的下一題" if today else "下一關"
+        st.markdown(f"🐻 **{label}**：{_md(here.title)}")
         st.caption(f"{_md(here.topic_name)} · {here.difficulty}")
         left, right = st.columns(2)
         url = safe_url(urls.get(here.task_id))

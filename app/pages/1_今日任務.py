@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import streamlit as st
+from streamlit.errors import StreamlitPageNotFoundError
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
@@ -193,6 +194,23 @@ def _show_progress(summary: dict, plan, end_date: _dt.date, today: _dt.date) -> 
     st.caption(caption)
 
 
+def _map_link(task_id: int) -> None:
+    """「在地圖上看」：到學習地圖並打開這一題的小卡（地圖頁讀 ``?task=``）。
+
+    頁面路徑相對於入口 ``Home.py``。單獨執行這一頁（例如 ``AppTest`` 冒煙測試）時
+    沒有入口、找不到別的頁面——那時不畫這個連結，打勾功能不受影響。
+    """
+    try:
+        st.page_link(
+            "pages/3_學習地圖.py",
+            label="在地圖上看",
+            icon="🗺️",
+            query_params={"task": str(task_id)},
+        )
+    except StreamlitPageNotFoundError:
+        pass
+
+
 def _render_item(session, item) -> None:
     """一張任務卡。打勾即寫入 ``progress_events``。
 
@@ -243,6 +261,7 @@ def _render_item(session, item) -> None:
                 f"`{tier}`　`{task.difficulty}`　`預估 {task.est_minutes} 分鐘`"
             )
             st.markdown(f"[在 HackerRank 開啟題目]({task.url})")
+            _map_link(task.id)
 
         # 「為什麼重要」——這是整個網站的賣點，不是裝飾。
         if item.reason:

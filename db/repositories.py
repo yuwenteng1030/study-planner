@@ -481,6 +481,20 @@ def _record(
 # ---------------------------------------------------------------------------
 
 
+def plan_marks(plan: Plan | None, today: _dt.date) -> "PlanMarks":
+    """進行中計畫 → 地圖上的「今天」與「過期」標記。被移出計畫的項目不標。"""
+    from core.game_map import PlanMarks
+
+    if plan is None:
+        return PlanMarks()
+    items = [i for i in plan.items if i.status != "skipped"]
+    todays = sorted((i for i in items if i.scheduled_date == today), key=lambda i: i.order_in_day)
+    overdue = frozenset(
+        i.task_id for i in items if i.scheduled_date < today and i.status == "todo"
+    )
+    return PlanMarks(today=tuple(i.task_id for i in todays), overdue=overdue)
+
+
 def progress_summary(plan: Plan, today: _dt.date) -> dict:
     """畫面上兩條進度條需要的數字。
 

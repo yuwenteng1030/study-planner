@@ -207,6 +207,29 @@ def next_stage(stages: list[Stage]) -> Stage | None:
     return stages[-1] if stages else None
 
 
+@dataclass(frozen=True)
+class PlanMarks:
+    """進行中計畫在地圖上的標記。沒有計畫時兩個都是空的。"""
+
+    #: 今天排的題目，照今天的順序（含已做完的，地圖上要看得出今天排了哪幾關）。
+    today: tuple[int, ...] = ()
+    #: 排在今天以前、還沒做的題目。
+    overdue: frozenset[int] = frozenset()
+
+
+def bear_stage(stages: list[Stage], marks: PlanMarks) -> Stage | None:
+    """小熊站哪一關：今天排的第一個還沒做的題目；今天的都做完（或沒計畫）就回到路線上第一個沒做的。
+
+    不先看過期的：落後要靠「今日任務」的重排處理，小熊跑回三天前會讓今天的任務看起來不見了。
+    """
+    by_id = {s.task_id: s for s in stages}
+    for task_id in marks.today:
+        stage = by_id.get(task_id)
+        if stage is not None and not stage.done:
+            return stage
+    return next_stage(stages)
+
+
 #: 地圖元件會送回來的事件種類。
 MAP_ACTIONS: frozenset[str] = frozenset({"pick", "close", "done", "undo"})
 
