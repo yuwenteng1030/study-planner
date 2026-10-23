@@ -347,15 +347,39 @@ def test_filler_scenery_keeps_clear_of_road_nodes_and_headers(topics, tasks) -> 
             assert all(((x - p.x) ** 2 + (y - p.y) ** 2) ** 0.5 >= NODE_CLEARANCE for p in placed)
 
 
+def _drawn_top(svg: str) -> float:
+    """從畫出來的 SVG 找最高點（y 最小）：看 y、y1、y2、cy−r／ry、points 與 path 裡的座標。"""
+    import re
+
+    ys = []
+    for tag in re.finditer(r"<(\w+)([^>]*)>", svg):
+        attrs = dict(re.findall(r'(\w[\w-]*)="([^"]*)"', tag.group(2)))
+        for key in ("y", "y1", "y2"):
+            if key in attrs:
+                ys.append(float(attrs[key]))
+        if "cy" in attrs:
+            ys.append(float(attrs["cy"]) - float(attrs.get("r", attrs.get("ry", 0))))
+        if "points" in attrs:
+            nums = [float(n) for n in re.split(r"[ ,]+", attrs["points"].strip()) if n]
+            ys += nums[1::2]
+        if "d" in attrs:
+            nums = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", attrs["d"])]
+            ys += nums[1::2]
+    return min(ys)
+
+
 def test_tallest_landmark_stays_below_the_plaque_of_the_row_above() -> None:
-    """地標底部在關卡中心下方 6、往上長 LANDMARK_MAX_HEIGHT×倍率；上一排的編號小牌底在它中心下方 27。"""
-    from core.farm_art import LANDMARK_MAX_HEIGHT, LANDMARK_SCALE
+    """量實際畫出來的地標（含放大），最高點不能碰到上一排的編號小牌（它的底在上一排中心下方 27）。"""
+    from core import farm_art
     from core.map_art import ROW_HEIGHT
 
-    landmark_top = 6 - LANDMARK_MAX_HEIGHT * LANDMARK_SCALE  # 相對於關卡中心
-    plaque_bottom_above = -ROW_HEIGHT + 27
-    assert landmark_top > plaque_bottom_above
-
+    base = 6  # 地標底部在關卡中心下方 6
+    for boss, kinds in ((True, ["castle"]), (False, list(farm_art._LANDMARKS))):
+        for kind in kinds:
+            drawn = (farm_art._castle if boss else farm_art._LANDMARKS[kind])(0, 0)
+            height = -_drawn_top(drawn) * farm_art.LANDMARK_SCALE
+            assert base - height > -ROW_HEIGHT + 27, (kind, height)
+            assert height <= farm_art.LANDMARK_MAX_HEIGHT * farm_art.LANDMARK_SCALE + 0.5, kind
 
 def test_every_landmark_kind_draws_and_topics_map_to_one() -> None:
     from core import farm_art

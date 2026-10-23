@@ -103,3 +103,20 @@ def test_deleting_the_account_also_removes_timer_and_api_usage(db_session) -> No
     db_session.flush()
     counts = repo.delete_user_data(db_session, 1, drop_account=True)
     assert counts["active_adventures"] == 1 and counts["api_usage"] == 1 and counts["users"] == 1
+
+
+def test_clearing_records_keeps_the_api_quota(db_session) -> None:
+    """只清紀錄（不刪帳號）時不能順便把當天的 API 額度歸零，否則按一下就多一份額度。"""
+    repo.ensure_user(db_session, 1)
+    db_session.add(ApiUsage(user_id=1, day=_dt.date(2026, 10, 23), kind="explain", count=3))
+    db_session.flush()
+    counts = repo.delete_user_data(db_session, 1)
+    assert counts["api_usage"] == 0
+    assert db_session.query(ApiUsage).filter_by(user_id=1).count() == 1
+
+
+def test_untimed_map_completions_are_not_calibration_samples(db_session) -> None:
+    repo.ensure_user(db_session, 1)
+    task_id = repo.load_task_inputs(db_session)[0].id
+    repo.mark_task_done_for_user(db_session, 1, task_id)  # 沒計時
+    assert repo.load_calibration_samples(db_session, 1) == []

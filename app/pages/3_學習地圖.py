@@ -48,8 +48,8 @@ MAP_KEY = "level_map"
 FOCUS_KEY = "map_focus"  # 小卡開在哪一關（task_id）；"next" 表示破關後跳到下一關
 CLEARED_KEY = "map_cleared"  # 剛破關的題名，給小卡說一聲「過關」
 ERROR_KEY = "map_error"
-CHEER_KEY = "map_cheer"
-CLEARED_MINUTES_KEY = "map_cleared_minutes"  # 剛破關那一題計時算出來的分鐘數  # 破關的鼓勵訊息，下一輪用 toast 顯示一次
+CHEER_KEY = "map_cheer"  # 破關的鼓勵訊息，下一輪用 toast 顯示一次
+CLEARED_MINUTES_KEY = "map_cleared_minutes"  # 剛破關那一題計時算出來的分鐘數
 
 # 地圖用 st.components.v2 直接放進頁面：st.html 的 DOMPurify 會把整段 SVG 濾掉，
 # st.image 又點不到。v2 元件不經過消毒，所以 SVG 裡的文字一律在 core/map_art.py
@@ -119,8 +119,10 @@ export default function (component) {
 
   root.querySelectorAll('.stage').forEach((node) => {
     const task = Number(node.getAttribute('data-task'));
-    // 不擋預設動作：<a target=_blank> 照常開題目，這裡只是順便開小卡
-    node.addEventListener('click', () => send('pick', task));
+    // 不擋預設動作：<a target=_blank> 照常開題目。還沒做完的關卡＝開始冒險（同時計時），
+    // 做完的關卡只打開小卡——點小島跟點小卡的「開始冒險」是同一件事
+    const done = node.classList.contains('done');
+    node.addEventListener('click', () => send(done ? 'pick' : 'start', task));
   });
 
   const focus = data.focus;
@@ -200,6 +202,11 @@ export default function (component) {
       if (target) target.scrollIntoView({ block: 'center' });
     }, 250);
   }
+
+  // 元件拿掉時停掉計時器（換頁、重新整理），不留下沒人看的 setInterval
+  return () => {
+    if (parentElement.__advTimer) clearInterval(parentElement.__advTimer);
+  };
 }
 """
 
@@ -239,7 +246,8 @@ def _mark_done(task_id: int, title: str) -> None:
         return
     st.session_state[FOCUS_KEY] = "next"
     st.session_state[CLEARED_KEY] = title
-    st.session_state[CLEARED_MINUTES_KEY] = timed
+    # 「已經做過」那一條不會寫入分鐘數，小卡也就不要說花了幾分鐘
+    st.session_state[CLEARED_MINUTES_KEY] = timed if where != "already" else None
     if cheer is not None:
         # 交易已經 commit 才問 Claude：等網路時不能抓著 SQLite 的寫入鎖
         message = encourage(cheer, template_message(cheer), user_id=user_id, quota=quota)

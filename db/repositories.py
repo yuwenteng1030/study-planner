@@ -769,7 +769,8 @@ def load_calibration_samples(session: Session, user_id: int) -> list[Sample]:
             TaskCompletion.actual_minutes, TaskCompletion.done_at,
         )
         .join(Task, TaskCompletion.task_id == Task.id)
-        .where(TaskCompletion.user_id == user_id)
+        # 只收有計時的：之前的地圖完成紀錄都沒有分鐘數，收進來會讓「沒算進來」的筆數一夕暴增
+        .where(TaskCompletion.user_id == user_id, TaskCompletion.actual_minutes.is_not(None))
     )
     samples += [
         Sample(task_id=t, difficulty=d, est_minutes=e, actual_minutes=a, done_at=at)
@@ -990,11 +991,17 @@ def delete_user_data(
         delete(TaskCompletion).where(TaskCompletion.user_id == user_id)
     ).rowcount
 
-    # 4b. 冒險計時與 API 額度：也都指向 users
+    # 4b. 冒險計時：是使用者的紀錄，一起清掉
     deleted_adventures = session.execute(
         delete(ActiveAdventure).where(ActiveAdventure.user_id == user_id)
     ).rowcount
-    deleted_usage = session.execute(delete(ApiUsage).where(ApiUsage.user_id == user_id)).rowcount
+    # API 額度只在刪帳號時刪（外鍵指向 users）。只清紀錄時保留：不然「清除紀錄」
+    # 按一下就能拿到一份新的每日額度，呼叫 Claude 是要花錢的
+    deleted_usage = (
+        session.execute(delete(ApiUsage).where(ApiUsage.user_id == user_id)).rowcount
+        if drop_account
+        else 0
+    )
 
     # 5. users（只有明確要求時）
     deleted_users = (

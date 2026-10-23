@@ -281,7 +281,7 @@ def road_samples(points: list[tuple[float, float]], steps: int = 12) -> list[tup
 
 #: 小景物離路中心、離關卡中心至少要多遠（路寬 20、關卡半徑最大 21＋厚度）
 ROAD_CLEARANCE = 22
-NODE_CLEARANCE = 34
+NODE_CLEARANCE = 46  # 小島半徑 24～27，地標放大後高到中心上方約 42
 
 
 def filler_spots(
@@ -448,11 +448,13 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
         parts.append(f'<text x="{x + rx - 4:.1f}" y="{y - 6:.1f}" class="focus-star">⭐</text>')
     if adventuring:
         # 冒險中的旗子＋計時（秒數由頁面的 JavaScript 即時更新 .adv-time）
+        # 放在小島右側、跟小島同高：放上面會蓋到上一排的編號小牌和自己的地標
+        fx = x + rx + 2
         parts.append(
             f'<g class="adventure-flag" style="pointer-events:none">'
-            f'<rect x="{x - 34:.1f}" y="{y - 52:.1f}" width="68" height="18" rx="9" fill="#2F7FD1"/>'
-            f'<polygon points="{x - 4:.1f},{y - 34:.1f} {x + 4:.1f},{y - 34:.1f} {x:.1f},{y - 29:.1f}" fill="#2F7FD1"/>'
-            f'<text x="{x:.1f}" y="{y - 39:.1f}" class="adv-time">🧭 冒險中</text>'
+            f'<polygon points="{fx:.1f},{iy:.1f} {fx + 6:.1f},{iy - 5:.1f} {fx + 6:.1f},{iy + 5:.1f}" fill="#2F7FD1"/>'
+            f'<rect x="{fx + 5:.1f}" y="{iy - 9:.1f}" width="50" height="18" rx="9" fill="#2F7FD1"/>'
+            f'<text x="{fx + 30:.1f}" y="{iy + 4:.1f}" class="adv-time">🧭 冒險中</text>'
             "</g>"
         )
     parts.append(f"</{tag}>")
@@ -516,7 +518,7 @@ def render_svg(
         ".mark{font-size:11px;font-weight:800;text-anchor:middle}"
         ".zone{font-size:14px;font-weight:700;fill:#FFF6E0;text-anchor:middle}"
         ".crown{font-size:12px;text-anchor:middle;pointer-events:none}"
-        ".adv-time{font-size:10.5px;font-weight:700;fill:#fff;text-anchor:middle}"
+        ".adv-time{font-size:9.5px;font-weight:700;fill:#fff;text-anchor:middle;font-variant-numeric:tabular-nums}"
         "@keyframes advpulse{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}"
         ".adventure-flag{animation:advpulse 1.2s ease-in-out infinite}"
         ".focus-star{font-size:10px;text-anchor:middle;pointer-events:none}"
