@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import datetime as _dt
+
 import json
 import sys
 from pathlib import Path
@@ -21,6 +23,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from api.deps import get_current_user  # noqa: E402
+from core import clock  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
 
@@ -65,10 +68,17 @@ def _show_summary(export: dict) -> None:
     col_b.metric("完成的項目", f"{len(done)} / {len(items)}")
     col_c.metric("累積練習時間", f"{minutes} 分鐘")
     st.caption(
-        f"帳號建立於 {export['user']['created_at'] or '—'}　|　"
+        f"帳號建立於 {_local_day(export['user']['created_at'], export['user'].get('tz'))}　|　"
         f"事件紀錄 {len(export['progress_events'])} 筆　|　"
         f"地圖上計畫外完成 {len(export['task_completions'])} 題"
     )
+
+
+def _local_day(iso_utc: str | None, tz: str | None, fmt: str = "%Y/%m/%d") -> str:
+    """匯出檔裡的 UTC 時間 → 使用者時區的日期（畫面與檔名用；檔案內容維持 UTC）。"""
+    if not iso_utc:
+        return "—"
+    return clock.to_local_date(_dt.datetime.fromisoformat(iso_utc), tz).strftime(fmt)
 
 
 def _show_export(export: dict) -> None:
@@ -84,7 +94,7 @@ def _show_export(export: dict) -> None:
     st.download_button(
         "下載我的學習紀錄（JSON）",
         data=payload,
-        file_name=f"study-planner-export-{export['exported_at'][:10].replace('-', '')}.json",
+        file_name=f"study-planner-export-{_local_day(export['exported_at'], export['user'].get('tz'), '%Y%m%d')}.json",
         mime="application/json",
         type="primary",
     )
