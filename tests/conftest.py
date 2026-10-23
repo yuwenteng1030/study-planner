@@ -44,10 +44,11 @@ def seeded_app_db() -> Path:
     給 UI 測試用：Streamlit 的頁面會自己去連 ``db.session``，
     沒辦法像單元測試那樣塞一個假的 session 進去。
     """
-    from db.models import Base, Task, Topic, User
-    from db.session import SessionLocal, get_engine
+    from db.models import Task, Topic, User
+    from db.session import SessionLocal, init_db
 
-    Base.metadata.create_all(get_engine())
+    # 走跟網站一樣的路：Alembic migration，不是 create_all
+    init_db()
 
     with SessionLocal() as session:
         if session.query(Topic).count() == 0:

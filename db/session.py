@@ -15,10 +15,8 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
-from db.models import Base
 
 #: 專案根目錄（本檔案的上一層的上一層）。
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -48,51 +46,70 @@ def get_engine() -> Engine:
 
 
 def init_db() -> None:
-    """建立所有資料表（已存在的不動）。"""
-    Base.metadata.create_all(_engine)
+    """把資料庫升到最新的 schema（Alembic ``upgrade head``）。空資料庫會從頭建起。"""
+    upgrade_to_head()
 
 
-#: 這個行程是否已經補過缺的資料表。Streamlit 每個瀏覽器分頁一條執行緒，所以要上鎖：
-#: 兩條同時第一次開交易，SQLite 會讓其中一條撞上 ``table already exists``。
+#: 導入 Alembic 那一版的 revision。導入前就存在的資料庫直接標成這一版。
+BASELINE_REVISION = "0001"
+
+
+def _alembic_config():  # noqa: ANN202
+    from alembic.config import Config
+
+    cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    # 用絕對路徑：從別的工作目錄啟動（例如 streamlit run app/Home.py）也找得到
+    cfg.set_main_option("script_location", str(PROJECT_ROOT / "db" / "migrations"))
+    return cfg
+
+
+def upgrade_to_head() -> None:
+    """跑完所有還沒跑的 migration。
+
+    導入 Alembic（2026-10-23）以前建的資料庫沒有 ``alembic_version`` 表：
+    補上當時唯一一個手動加過的欄位，標成 baseline，再往上升。
+    用 ``create_all`` 建好的資料庫（測試）本來就是最新的樣子，直接標成最新版。
+    """
+    from alembic import command
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import inspect, text
+
+    cfg = _alembic_config()
+    with _engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        inspector = inspect(conn)
+        tables = set(inspector.get_table_names())
+        if tables and "alembic_version" not in tables:
+            user_columns = {c["name"] for c in inspector.get_columns("users")} if "users" in tables else set()
+            if "tz" in user_columns:
+                command.stamp(cfg, ScriptDirectory.from_config(cfg).get_current_head())
+            else:
+                if "plan_items" in tables:
+                    item_columns = {c["name"] for c in inspector.get_columns("plan_items")}
+                    if "reason_source" not in item_columns:
+                        conn.execute(text("ALTER TABLE plan_items ADD COLUMN reason_source VARCHAR(10)"))
+                command.stamp(cfg, BASELINE_REVISION)
+        command.upgrade(cfg, "head")
+
+
+#: 這個行程是否已經升級過 schema。Streamlit 每個瀏覽器分頁一條執行緒，所以要上鎖：
+#: 兩條同時第一次開交易，會各跑一次 migration。
 _schema_ready = False
 _schema_lock = threading.Lock()
 
 
-#: 既有資料庫補欄位用：``(表, 欄位, SQL 型別)``。只能加可為 NULL 的欄位。
-_ADDED_COLUMNS = [("plan_items", "reason_source", "VARCHAR(10)")]
-
-
-def _add_missing_columns() -> None:
-    """``create_all`` 不會改既有的表，所以新欄位在這裡用 ALTER TABLE 補。"""
-    from sqlalchemy import inspect, text
-
-    inspector = inspect(_engine)
-    with _engine.begin() as conn:
-        for table, column, sql_type in _ADDED_COLUMNS:
-            existing = {c["name"] for c in inspector.get_columns(table)}
-            if column not in existing:
-                try:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
-                except OperationalError as exc:
-                    # 另一個行程剛好先補上了：不是錯誤
-                    if "duplicate column" not in str(exc).lower():
-                        raise
-
-
 def _ensure_schema() -> None:
-    """第一次開交易時補上缺的資料表。
+    """第一次開交易時把資料庫升到最新版（每個行程一次）。
 
-    新功能加了新表（例如 ``task_completions``）之後，既有的 ``study.db`` 裡沒有它，
-    頁面一查就會炸 ``no such table``。``create_all`` 只建**不存在**的表、不改既有
-    的表與資料，所以每個行程跑一次是安全的；要改既有欄位時這招不夠，得寫 migration。
+    原本用 ``create_all`` 加一份手寫的 ALTER 清單：只能加可為 NULL 的欄位，改不了
+    約束與索引，也沒有版本紀錄。2026-10-23 改用 Alembic，schema 變更一律寫 migration。
     """
     global _schema_ready
     if _schema_ready:
         return
     with _schema_lock:
         if not _schema_ready:
-            init_db()
-            _add_missing_columns()
+            upgrade_to_head()
             _schema_ready = True
 
 

@@ -11,8 +11,10 @@
 回頭改所有查詢很貴」——開放登入時只需要改 `api/deps.py`
 的 `get_current_user()`，不必動任何一張表或任何一句查詢。
 
-v0.1.5／v0.2 才會用到的 4 張表（`topic_demand`、`user_task_stats`、
-`jds`、`api_usage`）刻意不在這裡建，隨各自的功能一起進來。
+v0.1.5／v0.2 才會用到的 3 張表（`topic_demand`、`user_task_stats`、
+`jds`）刻意不在這裡建，隨各自的功能一起進來。`api_usage` 2026-10-23 加入（額度改存資料庫）。
+
+**schema 變更一律寫 Alembic migration**（`db/migrations/versions/`），不要只改這個檔案。
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -161,6 +164,12 @@ class User(Base):
     #: 每日 LLM 呼叫上限。多使用者時用來防止單一使用者燒掉整個額度。
     daily_api_quota: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
 
+    #: IANA 時區名稱。「今天」照使用者的時區算，不照伺服器的時鐘：
+    #: 部署在 UTC 的伺服器上，台灣早上 8 點前用伺服器的日期會看到昨天的任務。
+    tz: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="Asia/Taipei", server_default="Asia/Taipei"
+    )
+
     created_at: Mapped[_dt.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
@@ -204,6 +213,10 @@ class Plan(Base):
         DateTime, nullable=False, server_default=func.now()
     )
 
+    #: 最後一次檢查「要不要重排」是哪一天（使用者時區）。落後只會在日子過去時發生，
+    #: 所以一天檢查一次就夠；用條件式 UPDATE 搶這一格，兩個分頁同時開也只有一個會重排。
+    last_replanned_on: Mapped[_dt.date | None] = mapped_column(Date, nullable=True)
+
     user: Mapped["User"] = relationship(back_populates="plans")
     items: Mapped[list["PlanItem"]] = relationship(
         back_populates="plan", cascade="all, delete-orphan"
@@ -214,6 +227,15 @@ class Plan(Base):
         CheckConstraint("daily_minutes > 0", name="ck_plans_daily_minutes"),
         CheckConstraint(
             "level IN ('familiar', 'normal', 'new')", name="ck_plans_level"
+        ),
+        # 同一個使用者同時只能有一份進行中的計畫。原本只靠 create_plan 先把舊的收起來，
+        # 兩次「排出計畫」同時送出就可能留下兩份 active。partial index 兩種資料庫都支援。
+        Index(
+            "uq_plans_one_active_per_user",
+            "user_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
         ),
     )
 
@@ -343,3 +365,21 @@ class TaskCompletion(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "task_id", name="uq_task_completions_user_task"),
     )
+
+
+class ApiUsage(Base):
+    """每位使用者每天呼叫 Claude 的次數，依用途分開記。
+
+    原本存在記憶體：伺服器重開就歸零、多個 worker 各算各的，額度形同虛設。
+    ``day`` 是使用者時區的日期，所以「每天」跟使用者看到的「今天」一致。
+    """
+
+    __tablename__ = "api_usage"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True)
+    day: Mapped[_dt.date] = mapped_column(Date, primary_key=True)
+    #: ``explain``（計畫說明）或 ``encourage``（鼓勵訊息）
+    kind: Mapped[str] = mapped_column(String(20), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (CheckConstraint("count >= 0", name="ck_api_usage_count"),)

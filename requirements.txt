@@ -9,6 +9,8 @@
 # v0.1
 streamlit==1.66.0
 SQLAlchemy==2.1.5
+# schema 變更走 migration（db/migrations/），網站啟動時自動升級
+alembic==1.16.5
 pydantic==2.14.1
 anthropic==1.17.0
 PyYAML==6.0.3

@@ -8,7 +8,7 @@ from __future__ import annotations
 import datetime as _dt
 from types import SimpleNamespace
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 import llm.client as client_mod
 from core.planner import build_plan
@@ -98,26 +98,6 @@ def test_generated_text_drops_links_and_extra_lines(db_session, monkeypatch) -> 
     )
     out = client_mod.explain_task("T", "Arrays", [], "預存")
     assert out.text == "練雜湊點我" and "http" not in out.text
-
-
-def test_existing_database_gets_the_new_column(tmp_path) -> None:
-    from sqlalchemy import create_engine
-
-    import db.session as session_mod
-
-    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}", future=True)
-    with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE plan_items (id INTEGER PRIMARY KEY, reason TEXT)"))
-    original = session_mod._engine
-    session_mod._engine = engine
-    try:
-        session_mod._add_missing_columns()
-        session_mod._add_missing_columns()  # 重跑要安全
-    finally:
-        session_mod._engine = original
-    with engine.connect() as conn:
-        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(plan_items)"))]
-    assert "reason_source" in cols
 
 
 def _count_calls(monkeypatch):

@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import yaml
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 # 讓這支檔案可以用 `python scripts/import_data.py` 直接執行
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -120,6 +120,9 @@ def import_all(reset: bool = False) -> dict[str, int]:
 
     if reset:
         Base.metadata.drop_all(get_engine())
+        # 版本表也要清掉，否則 Alembic 以為已經是最新版，什麼表都不建
+        with get_engine().begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
     init_db()
 
     with session_scope() as session:
