@@ -1,9 +1,10 @@
-"""資料表定義（v0.1-core：6 張）。
+"""資料表定義（v0.1-core：7 張）。
 
 分兩類：
 
 * **全域**（`tasks`、`topics`）：所有使用者共用，沒有 `user_id`。
-* **使用者資料**（`users`、`plans`、`plan_items`、`progress_events`）：
+* **使用者資料**（`users`、`plans`、`plan_items`、`progress_events`、
+  `task_completions`）：
   一律帶 `user_id`，即使 v0.1 只有一筆使用者。
 
 為什麼第一版就帶 `user_id`：見 README 設計決策表。簡單說是「加欄位很便宜，
@@ -304,4 +305,37 @@ class ProgressEvent(Base):
         CheckConstraint(
             "event IN ('done', 'undo', 'replan')", name="ck_progress_events_event"
         ),
+    )
+
+
+class TaskCompletion(Base):
+    """在**計畫之外**做完的一題（從學習地圖按「我 submit 過了」）。
+
+    為什麼不塞進 ``plan_items``：計畫項目代表「排程排了這一題」，有日期與分級；
+    地圖上自己跑去做的題目沒有這些東西，硬塞會讓「計畫完成率」被灌水。
+    為什麼不記成 ``progress_events``：那張表的 ``plan_id`` 是 NOT NULL，
+    事件本來就是「某份計畫裡發生的事」。
+
+    題目若在進行中的計畫裡、而且還沒勾（``todo``），完成照舊寫在 ``plan_items``，
+    不會寫進這裡。新的寫入只寫一個地方；但舊資料可能兩邊都有（例如舊計畫勾過、
+    這裡也記過），所以「取消完成」會把每一個說它做完的地方都清掉。
+    """
+
+    __tablename__ = "task_completions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    task_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tasks.id"), nullable=False
+    )
+    done_at: Mapped[_dt.datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    task: Mapped["Task"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "task_id", name="uq_task_completions_user_task"),
     )

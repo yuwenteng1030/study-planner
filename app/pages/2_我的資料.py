@@ -4,8 +4,8 @@
 帶走、能不能刪掉」是開放之前的最低門檻——不是等到有人來要才補。
 
 兩個動作的實作都在 ``db/repositories.py``：匯出要含所有計畫（包含已收起來
-的），刪除要按 ``progress_events`` → ``plan_items`` → ``plans`` → ``users``
-的順序走。那是 schema 的知識，不該寫在畫面裡。
+的），刪除要按 ``progress_events`` → ``plan_items`` → ``plans`` →
+``task_completions`` → ``users`` 的順序走。那是 schema 的知識，不該寫在畫面裡。
 """
 
 from __future__ import annotations
@@ -67,7 +67,8 @@ def _show_summary(export: dict) -> None:
     col_c.metric("累積練習時間", f"{minutes} 分鐘")
     st.caption(
         f"帳號建立於 {export['user']['created_at'] or '—'}　|　"
-        f"事件紀錄 {len(export['progress_events'])} 筆"
+        f"事件紀錄 {len(export['progress_events'])} 筆　|　"
+        f"地圖上計畫外完成 {len(export['task_completions'])} 題"
     )
 
 
@@ -182,7 +183,8 @@ def _confirm_and_delete(
         "已刪除："
         f"{counts['plans']} 份計畫、"
         f"{counts['plan_items']} 個項目、"
-        f"{counts['progress_events']} 筆事件紀錄"
+        f"{counts['progress_events']} 筆事件紀錄、"
+        f"{counts['task_completions']} 筆計畫外完成"
         + (f"、帳號 {counts['users']} 筆" if drop_account else "")
     )
     st.caption("重新整理這一頁就會看到更新後的數字。")

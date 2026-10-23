@@ -1,7 +1,7 @@
 """學習地圖：把知識地圖攤成「區域 → 關卡」，並數出每一關打了幾題。
 
-這一版是**唯讀**的：只畫地圖與進度，不做星等、不做解鎖。
-破關條件（幾題算一星、一星是否解鎖下一關）是參數，等實際看過畫面再定——
+一關＝一題（``build_stages``），做完就變金色；主題（``Level``）是路上的一段，
+用來分區與統計題數。不鎖關、不做星等——星等門檻是參數（提案決策 5），
 憑空選一個數字，之後多半要改。
 
 區域不另外存，直接從 ``topics.prereq`` 算：一個主題的區號是它到起點的
@@ -118,3 +118,86 @@ def difficulty_order(difficulty: str) -> int:
         return DIFFICULTIES.index(difficulty)
     except ValueError:
         return len(DIFFICULTIES)
+
+
+# ---------------------------------------------------------------------------
+# 一關一題
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Stage:
+    """路線上的一關＝一題。主題（``Level``）退成「這一關屬於哪一段路」。"""
+
+    task_id: int
+    title: str
+    difficulty: str
+    topic_id: str
+    topic_name: str
+    zone: int
+    done: bool
+
+
+def build_stages(levels: list[Level], tasks: Iterable[TaskInput], done_task_ids: set[int]) -> list[Stage]:
+    """把每一題攤成一關，照路線順序排好。
+
+    主題的順序沿用 ``build_map``（區號、重要性）；同一主題裡 Easy → Medium → Hard，
+    同難度照題目 id。觀念關沒有題目，所以不在路線上。
+
+    這裡不鎖關：後面的關卡照樣能點。「下一關」只是小熊站的位置（``next_stage``）。
+    """
+    by_topic: dict[str, list[TaskInput]] = {}
+    for task in tasks:
+        by_topic.setdefault(task.topic_id, []).append(task)
+
+    stages: list[Stage] = []
+    for level in levels:
+        members = sorted(
+            by_topic.get(level.topic_id, []),
+            key=lambda t: (difficulty_order(t.difficulty), t.id),
+        )
+        stages.extend(
+            Stage(
+                task_id=t.id,
+                title=t.title,
+                difficulty=t.difficulty,
+                topic_id=level.topic_id,
+                topic_name=level.name,
+                zone=level.zone,
+                done=t.id in done_task_ids,
+            )
+            for t in members
+        )
+    return stages
+
+
+def next_stage(stages: list[Stage]) -> Stage | None:
+    """路線上第一個還沒做的關卡；全部做完就是最後一關（小熊站在終點）。"""
+    for stage in stages:
+        if not stage.done:
+            return stage
+    return stages[-1] if stages else None
+
+
+#: 地圖元件會送回來的事件種類。
+MAP_ACTIONS: frozenset[str] = frozenset({"pick", "close", "done", "undo"})
+
+
+def parse_map_action(action: object, known_ids: Iterable[int]) -> tuple[str, int] | None:
+    """檢查地圖元件從瀏覽器送回來的事件；不合格就回 ``None``，什麼都不做。
+
+    內容來自瀏覽器，任何人都能在開發者工具裡送任意值，所以：
+
+    - ``task`` 必須是整數、而且是地圖上畫出來的題目——擋掉超大整數
+      （SQLite 會拋 ``OverflowError``）、清單或字典（``in`` 會拋 ``TypeError``）、
+      以及不在地圖上的 id。
+    - ``True`` 在 Python 裡等於 1，所以 bool 要另外擋。
+    """
+    if not isinstance(action, dict):
+        return None
+    kind, task = action.get("type"), action.get("task")
+    if kind not in MAP_ACTIONS:
+        return None
+    if not isinstance(task, int) or isinstance(task, bool) or task not in set(known_ids):
+        return None
+    return kind, task

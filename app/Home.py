@@ -44,6 +44,7 @@ def main() -> None:
     with session_scope() as session:
         topics = repo.load_topic_nodes(session)
         tasks = repo.load_task_inputs(session)
+        done_ids = repo.load_completed_task_ids_for_user(session, get_current_user())
         topic_names = {t.id: t.name for t in topics}
 
     if not tasks:
@@ -116,9 +117,15 @@ def main() -> None:
     levels = {tid: "familiar" for tid in familiar}
     levels.update({tid: "new" for tid in brand_new})
 
+    # 做過的題目（任何一份計畫裡打過勾，或在學習地圖上完成的）不再排進新計畫
+    remaining = [t for t in tasks if t.id not in done_ids]
+    if not remaining:
+        st.success("🏆 題庫裡每一題都做過了，沒有新的題目可以排。")
+        return
+
     core_plan = build_plan(
         topics=topics,
-        tasks=tasks,
+        tasks=remaining,
         start_date=start_date,
         days=int(days),
         daily_minutes=daily_minutes,

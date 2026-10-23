@@ -10,8 +10,8 @@ import datetime as _dt
 
 import pytest
 
-from core.game_map import build_map, zones
-from core.planner import TopicNode, build_plan
+from core.game_map import build_map, build_stages, next_stage, parse_map_action, zones
+from core.planner import TaskInput, TopicNode, build_plan
 from core.scoring import JDStats, UserContext
 from db import repositories as repo
 from db.models import User
@@ -190,3 +190,87 @@ def test_unchecked_and_skipped_items_are_not_completed(db_session) -> None:
     session.flush()
 
     assert repo.load_completed_task_ids_for_user(session, 1) == {done.task_id}
+
+
+# ---------------------------------------------------------------------------
+# 一關一題
+# ---------------------------------------------------------------------------
+
+
+def _task(task_id: int, topic: str, difficulty: str = "Easy") -> TaskInput:
+    return TaskInput(id=task_id, title=f"T{task_id}", topic_id=topic, difficulty=difficulty, est_minutes=10)
+
+
+def test_every_task_becomes_exactly_one_stage(topics, tasks) -> None:
+    stages = build_stages(build_map(topics, tasks, set()), tasks, set())
+    assert sorted(s.task_id for s in stages) == sorted(t.id for t in tasks)
+
+
+def test_stages_follow_the_map_then_easy_to_hard() -> None:
+    """主題照地圖順序；同主題 Easy → Medium → Hard，同難度照 id——不照輸入順序。"""
+    nodes = [
+        TopicNode(id="root", name="R", base_weight=1),
+        TopicNode(id="next", name="N", base_weight=1, prereq=("root",)),
+    ]
+    tasks = [
+        _task(9, "next"),
+        _task(5, "root", "Hard"),
+        _task(3, "root", "Medium"),
+        _task(7, "root"),
+        _task(4, "root"),
+    ]
+    stages = build_stages(build_map(nodes, tasks, set()), tasks, set())
+    assert [s.task_id for s in stages] == [4, 7, 3, 5, 9]
+    assert [s.zone for s in stages] == [0, 0, 0, 0, 1]
+    assert stages[0].topic_name == "R"
+
+
+def test_concept_topic_has_no_stage(topics, tasks) -> None:
+    stages = build_stages(build_map(topics, tasks, set()), tasks, set())
+    assert "time_complexity" not in {s.topic_id for s in stages}
+
+
+def test_next_stage_is_the_first_unfinished_one() -> None:
+    nodes = [TopicNode(id="a", name="A", base_weight=1)]
+    tasks = [_task(1, "a"), _task(2, "a"), _task(3, "a")]
+    stages = build_stages(build_map(nodes, tasks, {1, 3}), tasks, {1, 3})
+    assert [s.done for s in stages] == [True, False, True]
+    assert next_stage(stages).task_id == 2
+
+
+def test_next_stage_waits_at_the_end_when_everything_is_done() -> None:
+    nodes = [TopicNode(id="a", name="A", base_weight=1)]
+    tasks = [_task(1, "a"), _task(2, "a")]
+    stages = build_stages(build_map(nodes, tasks, {1, 2}), tasks, {1, 2})
+    assert next_stage(stages).task_id == 2
+    assert next_stage([]) is None
+
+
+# ---------------------------------------------------------------------------
+# 地圖元件送回來的事件
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["pick", "close", "done", "undo"])
+def test_valid_map_actions_pass(kind: str) -> None:
+    assert parse_map_action({"type": kind, "task": 7}, {7, 8}) == (kind, 7)
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        None,
+        "done",
+        {"type": "done"},
+        {"type": "delete", "task": 7},  # 不認得的事件
+        {"type": "done", "task": 9},  # 不在地圖上
+        {"type": "done", "task": True},  # True == 1
+        {"type": "done", "task": "7"},
+        {"type": "done", "task": 7.0},
+        {"type": "done", "task": [7]},  # 不可雜湊，``in`` 會拋 TypeError
+        {"type": "done", "task": {"a": 1}},
+        {"type": "done", "task": 10**20},  # SQLite 存不下
+    ],
+)
+def test_bad_map_actions_are_ignored(action) -> None:
+    assert parse_map_action(action, {1, 7, 8}) is None

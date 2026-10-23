@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -115,14 +116,53 @@ def test_progress_moves_in_the_same_run_as_the_click(seeded_app_db) -> None:
     )
 
 
-def test_map_page_draws_four_zones(seeded_app_db) -> None:
-    """地圖頁要有插畫，文字版也要列出四個區域、每個有題目的關卡各一條進度條。"""
+def _map_data(app) -> dict:
+    """地圖元件收到的資料（SVG 與小熊位置）。元件的 JavaScript 在測試裡不會跑。"""
+    [element] = app.get("bidi_component")
+    return json.loads(element.proto.json)
+
+
+def _map_done(app) -> int:
+    # 讀文字，不讀 ``.value``：Streamlit 把進度存成整數百分比，
+    # 1 / 125 ≒ 0.8% 會被截成 0，數值比對會誤判成「沒接上資料庫」。
+    return int(app.progress[0].proto.text.split()[1])  # 「全部 n / m 關」
+
+
+def test_map_page_draws_every_task_as_a_level(seeded_app_db) -> None:
+    """地圖要畫出每一題一關、一隻小熊，文字版也要列出四個區域。"""
     app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
     assert not app.exception, [str(e.value) for e in app.exception]
-    assert len(app.get("image")) == 1, "插畫沒畫出來"
+
+    data = _map_data(app)
+    assert data["svg"].count("data-task=") == 125
+    assert data["svg"].count('class="bear"') == 1
+    assert f'data-task="{data["here"]}"' in data["svg"]
     assert [h.value for h in app.subheader] == ["起點・小木屋", "第一區・草原", "第二區・森林", "第三區・雪山"]
-    # 1 條全部進度 + 20 個有題目的關卡（time_complexity 是觀念關，不畫進度條）
-    assert len(app.progress) == 21
+
+
+def test_submit_button_clears_the_level_and_moves_the_bear(seeded_app_db) -> None:
+    """按「我 submit 過了」：總數多一、小熊換到下一關、上方面板換成下一題。
+
+    不管這一題在不在計畫裡（共用的測試資料庫可能已經有計畫），
+    「寫到哪裡」由 ``test_map_completion.py`` 守，這裡確認按鈕真的接上了。
+    """
+    app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
+    before_done, before_here = _map_done(app), _map_data(app)["here"]
+    assert before_done < 124, "前提不成立：共用的測試資料庫已經做到最後一關，小熊不會再走"
+    before_title = app.markdown[0].value
+
+    [button] = [b for b in app.button if b.label == "我 submit 過了"]
+    button.click().run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+
+    assert _map_done(app) == before_done + 1
+    data = _map_data(app)
+    assert data["here"] != before_here
+    assert f'data-task="{before_here}"' in data["svg"]
+    # 破關後小卡直接開在下一關，並說一聲過關
+    assert data["focus"]["task"] == data["here"]
+    assert data["focus"]["cleared"]
+    assert app.markdown[0].value != before_title
 
 
 def test_map_page_counts_tasks_checked_on_the_today_page(seeded_app_db) -> None:
@@ -135,9 +175,7 @@ def test_map_page_counts_tasks_checked_on_the_today_page(seeded_app_db) -> None:
     def map_done() -> int:
         app = AppTest.from_file(MAP_PAGE, default_timeout=TIMEOUT).run()
         assert not app.exception, [str(e.value) for e in app.exception]
-        # 讀文字，不讀 ``.value``：Streamlit 把進度存成整數百分比，
-        # 1 / 125 ≒ 0.8% 會被截成 0，數值比對會誤判成「沒接上資料庫」。
-        return int(app.progress[0].proto.text.split()[1])  # 「全部 n / m 題」
+        return _map_done(app)
 
     home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
     home.number_input[0].set_value(10)
@@ -153,6 +191,30 @@ def test_map_page_counts_tasks_checked_on_the_today_page(seeded_app_db) -> None:
         if map_done() > before:
             return
     pytest.fail(f"今天每一題都勾了，地圖仍停在 {before} 題")
+
+
+def test_new_plan_skips_tasks_already_done(seeded_app_db) -> None:
+    """地圖上做完的（或任何一份計畫裡勾過的）題目，新排的計畫不能再排一次。"""
+    from db import repositories as repo
+    from db.session import session_scope
+
+    with session_scope() as session:
+        task_id = repo.load_task_inputs(session)[0].id
+        repo.mark_task_done_for_user(session, 1, task_id)
+    with session_scope() as session:
+        done = repo.load_completed_task_ids_for_user(session, 1)
+    assert task_id in done
+
+    home = AppTest.from_file(HOME, default_timeout=TIMEOUT).run()
+    home.number_input[0].set_value(10)
+    home.number_input[1].set_value(1.0)
+    home.button[0].click().run()
+    assert not home.exception, [str(e.value) for e in home.exception]
+
+    with session_scope() as session:
+        planned = {i.task_id for i in repo.load_active_plan(session, 1).items}
+    assert planned, "前提不成立：沒排出任何題目"
+    assert not planned & done, f"做過的題目又被排進來：{sorted(planned & done)}"
 
 
 def test_overlapping_self_assessment_is_rejected(seeded_app_db) -> None:

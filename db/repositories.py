@@ -19,7 +19,7 @@ from core.planner import Plan as CorePlan
 from core.planner import ScheduledItem, TaskInput, TopicNode
 from core.replanner import Replan
 from core.scoring import UserContext
-from db.models import Plan, PlanItem, ProgressEvent, Task, Topic, User
+from db.models import Plan, PlanItem, ProgressEvent, Task, TaskCompletion, Topic, User
 
 #: ``parsed_goal`` JSON 裡放自評程度的鍵。
 #:
@@ -66,6 +66,11 @@ def load_task_inputs(session: Session) -> list[TaskInput]:
         )
         for row in rows
     ]
+
+
+def load_task_urls(session: Session) -> dict[int, str]:
+    """題目 id → 題目網址。``TaskInput`` 是排程用的，不帶網址；地圖要連過去才需要。"""
+    return {task_id: url for task_id, url in session.execute(select(Task.id, Task.url))}
 
 
 def load_prereq_closure(session: Session) -> dict[str, frozenset[str]]:
@@ -210,18 +215,36 @@ def completed_task_ids(plan: Plan) -> set[int]:
 
 
 def load_completed_task_ids_for_user(session: Session, user_id: int) -> set[int]:
-    """這位使用者**所有**計畫裡完成過的題目，供學習地圖用。
+    """這位使用者做完過的題目：**所有**計畫裡打過勾的，加上計畫外完成的。
 
     不能只看目前的計畫：重排一份新計畫是常有的事，地圖的進度不該因此歸零。
-    已收起來的計畫照樣算——題目做過就是做過。
+    已收起來的計畫照樣算——題目做過就是做過。從地圖上做完、但不在計畫裡的題目
+    存在 ``task_completions``，同樣算數。
     """
-    rows = session.scalars(
+    in_plans = session.scalars(
         select(PlanItem.task_id)
         .join(Plan, PlanItem.plan_id == Plan.id)
         .where(Plan.user_id == user_id, PlanItem.status == "done")
         .distinct()
     )
-    return set(rows)
+    extra = session.scalars(
+        select(TaskCompletion.task_id).where(TaskCompletion.user_id == user_id)
+    )
+    return set(in_plans) | set(extra)
+
+
+def load_map_done_task_ids(session: Session, user_id: int) -> set[int]:
+    """學習地圖上要畫成金色的題目：做完過的，**扣掉進行中計畫裡還沒勾的**。
+
+    這個功能之前排的計畫會把舊計畫做過的題再排一次。那一題在地圖上若是金色，
+    小卡只會給「取消完成」，使用者就沒辦法從地圖把今日任務頁那一項勾起來——
+    地圖金色、今日任務頁沒勾，兩邊永遠對不上。所以進行中計畫說還沒做，地圖就照它。
+    """
+    done = load_completed_task_ids_for_user(session, user_id)
+    plan = load_active_plan(session, user_id)
+    if plan is not None:
+        done -= {i.task_id for i in plan.items if i.status == "todo"}
+    return done
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +273,63 @@ def mark_item_undone(session: Session, item: PlanItem) -> None:
     item.status = "todo"
     item.done_at = None
     _record(session, item.plan, "undo", item_id=item.id)
+
+
+def mark_task_done_for_user(session: Session, user_id: int, task_id: int) -> str:
+    """從學習地圖按「我 submit 過了」。回傳寫到哪裡：``plan``／``extra``／``already``。
+
+    題目在進行中的計畫裡、而且還沒做（``todo``）→ 勾那個計畫項目，跟今日任務頁
+    打勾是同一件事，事件照記。**這一條先看**：就算舊計畫或計畫外紀錄已經說它做完了，
+    進行中計畫裡的那一項也要勾，否則地圖是金色、今日任務頁卻還沒勾（這個功能上線前
+    排的計畫會包含做過的題目）。其餘情況（不在計畫裡、或已被重排移出計畫）→
+    寫一筆 ``task_completions``。已經做過的題目什麼都不寫，按兩次不會變兩筆。
+
+    Raises:
+        LookupError: 題目不存在。畫面送來的 id 不該被信任到直接寫進資料庫。
+    """
+    if session.get(Task, task_id) is None:
+        raise LookupError(f"task_id={task_id} 不存在")
+
+    plan = load_active_plan(session, user_id)
+    item = None
+    if plan is not None:
+        item = next(
+            (i for i in plan.items if i.task_id == task_id and i.status == "todo"), None
+        )
+    if item is not None:
+        mark_item_done(session, item)
+        return "plan"
+
+    if task_id in load_completed_task_ids_for_user(session, user_id):
+        return "already"
+    session.add(TaskCompletion(user_id=user_id, task_id=task_id))
+    return "extra"
+
+
+def mark_task_undone_for_user(session: Session, user_id: int, task_id: int) -> int:
+    """從學習地圖按「取消完成」。回傳改了幾筆。
+
+    要把**每一個**說它做完的地方都取消——包括已收起來的計畫——否則地圖的
+    進度是聯集，取消之後那一關還是金色的，按鈕看起來像壞掉。
+    計畫項目走 ``mark_item_undone``，取消事件照記。
+    """
+    items = session.scalars(
+        select(PlanItem)
+        .join(Plan, PlanItem.plan_id == Plan.id)
+        .where(
+            Plan.user_id == user_id,
+            PlanItem.task_id == task_id,
+            PlanItem.status == "done",
+        )
+    ).all()
+    for item in items:
+        mark_item_undone(session, item)
+    removed = session.execute(
+        delete(TaskCompletion).where(
+            TaskCompletion.user_id == user_id, TaskCompletion.task_id == task_id
+        )
+    ).rowcount
+    return len(items) + removed
 
 
 def apply_replan(session: Session, plan: Plan, result: Replan) -> None:
@@ -358,7 +438,8 @@ def progress_summary(plan: Plan, today: _dt.date) -> dict:
 # 多張表的刪除順序——那是 db/ 的知識，不該漏到 app/ 去。
 
 #: 匯出檔的格式版本。之後欄位有增減時靠這個數字判斷怎麼讀。
-EXPORT_FORMAT_VERSION = 1
+#: 2：加上 ``task_completions``（從地圖做完、不在計畫裡的題目）。
+EXPORT_FORMAT_VERSION = 2
 
 #: 帳號被刪掉後重建時用的預設值。與 ``scripts/import_data.py`` 的 SEED_USER 一致。
 _FALLBACK_EMAIL = "owner@localhost"
@@ -424,6 +505,13 @@ def export_user_data(session: Session, user_id: int) -> dict:
         .order_by(ProgressEvent.id)
     ).all()
 
+    extra = session.scalars(
+        select(TaskCompletion)
+        .where(TaskCompletion.user_id == user_id)
+        .order_by(TaskCompletion.id)
+        .options(selectinload(TaskCompletion.task))
+    ).all()
+
     return {
         "format_version": EXPORT_FORMAT_VERSION,
         "exported_at": _dt.datetime.now().isoformat(timespec="seconds"),
@@ -481,6 +569,15 @@ def export_user_data(session: Session, user_id: int) -> dict:
             }
             for event in events
         ],
+        "task_completions": [
+            {
+                "task_id": row.task_id,
+                "task_title": row.task.title,
+                "task_url": row.task.url,
+                "done_at": _iso(row.done_at),
+            }
+            for row in extra
+        ],
     }
 
 
@@ -504,7 +601,8 @@ def delete_user_data(
     * SQLite 的外鍵檢查是開著的（``db/session.py`` 的 ``PRAGMA foreign_keys=ON``），
       所以順序錯了會直接撞外鍵，不會默默留下指向空氣的孤兒列。
 
-    因此順序固定是 ``progress_events`` → ``plan_items`` → ``plans`` → ``users``，
+    因此順序固定是 ``progress_events`` → ``plan_items`` → ``plans`` →
+    ``task_completions`` → ``users``，
     由裡往外。這裡刻意用 bulk delete 而不是逐列 ``session.delete()``：
     bulk delete 不觸發 ORM cascade，刪什麼完全由上面這個順序決定，
     不會因為以後有人在 model 上加了一條 cascade 就悄悄改變行為。
@@ -534,7 +632,12 @@ def delete_user_data(
     # 3. plans
     deleted_plans = session.execute(delete(Plan).where(Plan.user_id == user_id)).rowcount
 
-    # 4. users（只有明確要求時）
+    # 4. task_completions：只指向 users 與 tasks，放在 users 之前刪就好
+    deleted_completions = session.execute(
+        delete(TaskCompletion).where(TaskCompletion.user_id == user_id)
+    ).rowcount
+
+    # 5. users（只有明確要求時）
     deleted_users = (
         session.execute(delete(User).where(User.id == user_id)).rowcount
         if drop_account
@@ -546,5 +649,6 @@ def delete_user_data(
         "progress_events": deleted_events,
         "plan_items": deleted_items,
         "plans": deleted_plans,
+        "task_completions": deleted_completions,
         "users": deleted_users,
     }

@@ -4,7 +4,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖皆可運作，153 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）皆可運作，192 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -41,7 +41,7 @@ Streamlit (app/)  →  core/  →  db/repositories.py  →  SQLite
 
 `core/` 是純函式：不碰資料庫、不發 HTTP、不呼叫 LLM，所以測試只需要傳字典。**換資料庫只改 `db/` 這一層。**
 
-四頁：`app/Home.py`（填條件、排計畫）、`app/pages/1_今日任務.py`（打勾、記時間、落後重排）、`app/pages/2_我的資料.py`（匯出、刪除）、`app/pages/3_學習地圖.py`（關卡圖：一條由下往上的蜿蜒小路，每關一個進度環，小熊站在下一關）。
+四頁：`app/Home.py`（填條件、排計畫）、`app/pages/1_今日任務.py`（打勾、記時間、落後重排）、`app/pages/2_我的資料.py`（匯出、刪除）、`app/pages/3_學習地圖.py`（關卡圖：一關＝一題，一條由下往上的蜿蜒小路；點關卡在新分頁打開 HackerRank 題目，回來按「我 submit 過了」就破關，小熊走到下一關）。
 
 ## 設計決策
 
@@ -104,7 +104,7 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 
 ### 9. 刪除資料的順序寫在 repository 層，不靠 ORM cascade
 
-刪一位使用者的資料要按 `progress_events` → `plan_items` → `plans` → `users` 的順序，由裡往外，而且用 bulk delete 而不是逐列 `session.delete()`。
+刪一位使用者的資料要按 `progress_events` → `plan_items` → `plans` → `task_completions` → `users` 的順序，由裡往外，而且用 bulk delete 而不是逐列 `session.delete()`。
 
 理由是現在的 schema 根本沒辦法只刪 `users` 那一列：`User.plans` 沒有 cascade、`plans.user_id` 是 NOT NULL，而 `progress_events` 的 `plan_id` 與 `item_id` 完全沒有被任何 cascade 覆蓋到。加上 SQLite 的外鍵檢查是開著的（設計決策 7 的代價），順序錯了會直接撞 `IntegrityError`。
 
@@ -119,6 +119,16 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 現在只留一道關卡，寫在真正執行刪除的地方，所以它跑得到、也測得到（`test_delete_without_typing_the_confirm_word_does_nothing`）。
 
 **代價**：按鈕永遠可以按，看起來不如 disabled 乾淨。但按下去會得到一句明確的「請先輸入…，沒有刪除任何資料」，而不是靜靜地什麼都沒發生。
+
+### 11. 破關靠「我 submit 過了」，不自動同步 HackerRank
+
+點關卡會在新分頁打開 HackerRank 的題目，submit 之後回到地圖按一下才算完成。
+
+能讀到「最近解了哪些題」的網址確實存在（`/rest/hackers/<帳號>/recent_challenges`），但它不是公開 API，而且 HackerRank 的 `robots.txt` 寫的是 `Disallow: /rest/`。對方明說不希望程式去讀的路徑，不因為「只讀自己的資料」就變成可以讀——這跟「不爬求職網站」是同一條線。
+
+完成紀錄分兩處存：題目在進行中的計畫裡而且還沒勾，就勾那個計畫項目（今日任務頁同步打勾）；其餘的寫一筆 `task_completions`。每次按鈕只寫一個地方，否則「計畫完成率」會被地圖上自己跑去做的題目灌水；「取消完成」則把每一個說它做完的地方都清掉，否則那一關還是金色。
+
+**代價**：系統相信使用者——按了就算，不知道是不是真的 AC。對一個自己用的學習工具，這個代價可以接受；要拿來排名或發證書就不行。
 
 ## 排程規則
 
@@ -146,7 +156,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 python -m scripts.import_data      # 匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 153 個測試
+pytest -q                          # 192 個測試
 streamlit run app/Home.py
 ```
 
@@ -162,7 +172,8 @@ streamlit run app/Home.py
 | `tests/test_integration.py` | 資料庫 → 排程 → 存檔 → 重排 → 打勾的完整路徑 |
 | `tests/test_user_data.py` | 匯出含所有計畫、刪除的跨表順序、刪完帳號還能繼續用 |
 | `tests/test_game_map.py` | 學習地圖：分區取最長前置鏈、題數不重不漏、換計畫進度不歸零、不算別人的 |
-| `tests/test_map_art.py` | 地圖插畫：後面的區畫在上方、換排不橫跨整張圖、區名不壓在小路上、小熊不停在觀念關、關卡名跳脫 |
+| `tests/test_map_art.py` | 地圖插畫：每題一個連結、後面的區畫在上方、一排只屬一個主題、S 形折返、區名不壓在小路上、小熊不蓋住關卡、只放行 HackerRank 網址、文字跳脫 |
+| `tests/test_map_completion.py` | 地圖上的「我 submit 過了」：計畫內勾計畫項目、計畫外另存一筆、按兩次只記一次、取消要連舊計畫一起清、不存在的題目擋下 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
 UI 冒煙測試不是裝飾：`pytest` 全綠、伺服器回 200、log 乾淨的情況下，打勾功能曾經是一個無窮迴圈——`st.rerun()` 用拋例外實作，而那個例外會讓外層的交易 rollback，於是每次重跑都再標記一次。只有真的去點那個 checkbox 才會發現。
