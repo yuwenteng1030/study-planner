@@ -56,7 +56,7 @@ CLEARED_MINUTES_KEY = "map_cleared_minutes"  # 剛破關那一題計時算出來
 # st.image 又點不到。v2 元件不經過消毒，所以 SVG 裡的文字一律在 core/map_art.py
 # escape、連結只放行 HackerRank；小卡的文字在下面的 JS 一律用 textContent。
 _MAP_CSS = """
-.map-root { position: relative; perspective: 1400px; }
+.map-root { position: relative; perspective: 1400px; display: flow-root; }  /* flow-root：盤面的負 margin 不往外塌 */
 /* 立體盤面：往後傾斜，下緣固定，像攤在桌上的遊戲地圖。小卡不在 svg 裡，所以不會跟著斜 */
 .map-root svg.tilt {
   transform: rotateX(18deg); transform-origin: 50% 100%;
@@ -80,6 +80,9 @@ _MAP_CSS = """
   content: ""; position: absolute; left: 50%; bottom: -8px; margin-left: -6px;
   border: 6px solid transparent; border-top-color: #E8A33A; border-bottom: 0;
 }
+/* 放在動物腳下時：泡泡往下長、尖角朝上 */
+.npc-bubble.below { transform: translate(-50%, 0); }
+.npc-bubble.below::after { bottom: auto; top: -8px; border-top: 0; border-bottom: 6px solid #E8A33A; }
 @media (prefers-reduced-motion: reduce) { .npc-bubble { transition: none; } }
 .card .adv-line { font-weight: 700; color: #2F7FD1; margin: -4px 0 8px; font-variant-numeric: tabular-nums; }
 .card .title { font-weight: 700; font-size: 14px; margin-right: 18px; }
@@ -108,6 +111,14 @@ export default function (component) {
   }
   // data.svg 由 core/map_art.py 產生，文字已 escape、連結只放行 HackerRank
   root.innerHTML = data.svg;
+
+  // 傾斜的盤面往後倒，上緣會往下縮，頁面上方留一塊空白。量出縮了多少，整張往上拉回去
+  const tilted = root.querySelector('svg.tilt');
+  if (tilted) {
+    tilted.style.marginTop = '0px';
+    const gap = tilted.getBoundingClientRect().top - root.getBoundingClientRect().top;
+    if (gap > 1) tilted.style.marginTop = `${-gap}px`;
+  }
 
   const send = (type, task) => setTriggerValue('action', { type, task });
 
@@ -214,16 +225,37 @@ export default function (component) {
   bubble.style.opacity = '0';
   root.appendChild(bubble);
   let turn = Math.floor(Math.random() * Math.max(npcs.length, 1));
-  const speak = (npc) => {
-    if (!npc || root.querySelector('.card')) { bubble.style.opacity = '0'; return; }
+  // 泡泡不能蓋住關卡：先放動物頭上，蓋到關卡就改放腳下，兩邊都蓋到就換別隻說（回傳 false）。
+  // 主動點的那隻一定要說，蓋到也放頭上。
+  const stages = Array.from(root.querySelectorAll('.stage'));
+  const hitsStage = () => {
+    const b = bubble.getBoundingClientRect();
+    return stages.some((st) => {
+      const s = st.getBoundingClientRect();
+      return b.left < s.right && b.right > s.left && b.top < s.bottom && b.bottom > s.top;
+    });
+  };
+  const speak = (npc, force = false) => {
+    if (!npc || root.querySelector('.card')) { bubble.style.opacity = '0'; return true; }
     const box = root.getBoundingClientRect();
     const r = npc.getBoundingClientRect();
     bubble.textContent = npc.getAttribute('data-line');
     const half = bubble.offsetWidth / 2;
     const cx = Math.max(half + 4, Math.min(r.left - box.left + r.width / 2, box.width - half - 4));
     bubble.style.left = `${cx}px`;
+    bubble.classList.remove('below');
     bubble.style.top = `${r.top - box.top - 6}px`;
+    if (hitsStage()) {
+      bubble.classList.add('below');
+      bubble.style.top = `${r.bottom - box.top + 6}px`;
+      if (hitsStage()) {
+        if (!force) return false;
+        bubble.classList.remove('below');
+        bubble.style.top = `${r.top - box.top - 6}px`;
+      }
+    }
     bubble.style.opacity = '1';
+    return true;
   };
   const visible = () => npcs.filter((n) => {
     const r = n.getBoundingClientRect();
@@ -232,11 +264,14 @@ export default function (component) {
   const next = () => {
     const pool = visible();
     if (!pool.length) { bubble.style.opacity = '0'; return; }
-    turn = (turn + 1) % pool.length;
-    speak(pool[turn]);
+    for (let tries = 0; tries < pool.length; tries++) {
+      turn = (turn + 1) % pool.length;
+      if (speak(pool[turn])) return;
+    }
+    bubble.style.opacity = '0';  // 每一隻說話都會蓋到關卡：這一輪安靜
   };
   npcs.forEach((n) => n.addEventListener('click', () => {
-    speak(n);
+    speak(n, true);
     clearInterval(parentElement.__npcTimer);
     parentElement.__npcTimer = setInterval(next, 6000);
   }));
