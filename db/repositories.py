@@ -133,6 +133,25 @@ def load_explain_inputs(session: Session, task_ids: list[int]) -> list[dict]:
     return out
 
 
+def load_generated_reasons(session: Session, user_id: int) -> dict[int, str]:
+    """這位使用者以前的計畫裡，Claude 生成過的說明：task id → 最新的一句。
+
+    排新計畫時拿來重用，同一題不重複花錢。被重排砍掉的項目 ``reason`` 會被加上
+    「（原推薦理由：…）」的前綴，所以那種不採用。
+    """
+    rows = session.execute(
+        select(PlanItem.task_id, PlanItem.reason)
+        .join(Plan, Plan.id == PlanItem.plan_id)
+        .where(
+            Plan.user_id == user_id,
+            PlanItem.reason_source == "llm",
+            PlanItem.status != "skipped",
+        )
+        .order_by(PlanItem.id)
+    ).all()
+    return {task_id: reason for task_id, reason in rows if reason}
+
+
 def build_user_context(parsed_goal: dict) -> UserContext:
     """從 ``plans.parsed_goal`` 還原評分需要的使用者條件。"""
     levels: dict[str, str] = {}

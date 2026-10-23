@@ -149,18 +149,20 @@ def main() -> None:
     }
 
     # 先讀題目資料、在交易外呼叫 Claude（會等網路），再開交易寫入。
+    user_id = get_current_user()
     with session_scope() as session:
         explain_inputs = repo.load_explain_inputs(
             session, [item.task_id for item in core_plan.items]
         )
+        earlier = repo.load_generated_reasons(session, user_id)
     with st.spinner("正在寫每一題的說明……"):
-        explanations = explain_many(explain_inputs)
+        explanations = explain_many(explain_inputs, user_id=user_id, reuse=earlier)
     generated = {tid for tid, e in explanations.items() if e.is_generated}
 
     with session_scope() as session:
         repo.create_plan(
             session,
-            user_id=get_current_user(),
+            user_id=user_id,
             goal_text=goal.label,
             parsed_goal=parsed_goal,
             start_date=start_date,

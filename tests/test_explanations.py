@@ -118,3 +118,55 @@ def test_existing_database_gets_the_new_column(tmp_path) -> None:
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(plan_items)"))]
     assert "reason_source" in cols
+
+
+def _count_calls(monkeypatch):
+    import anthropic
+
+    calls = []
+
+    class Counting(_FakeAnthropic):
+        def _create(self, **kw):
+            calls.append(kw["messages"][0]["content"])
+            return super()._create(**kw)
+
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **kw: Counting(**kw))
+    return calls
+
+
+def _fake_tasks(n):
+    return [
+        {"id": i, "title": f"T{i}", "topic_name": "A", "key_points": [], "static_note": f"預存{i}"}
+        for i in range(1, n + 1)
+    ]
+
+
+def test_reused_reasons_cost_nothing(monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    calls = _count_calls(monkeypatch)
+    out = client_mod.explain_many(_fake_tasks(3), user_id=901, reuse={1: "舊的", 2: "舊的二"})
+    assert len(calls) == 1  # 只有第 3 題要呼叫
+    assert out[1].text == "舊的" and out[1].is_generated
+    assert out[3].text == "一句客製說明"
+
+
+def test_daily_quota_caps_calls_and_rest_fall_back(monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    calls = _count_calls(monkeypatch)
+    out = client_mod.explain_many(_fake_tasks(5), user_id=902, quota=3)
+    assert len(calls) == 3
+    assert sum(e.is_generated for e in out.values()) == 3
+    assert out[5].text == "預存5" and not out[5].is_generated
+    # 同一天再排一次：額度已用完，一次都不呼叫
+    calls.clear()
+    out = client_mod.explain_many(_fake_tasks(5), user_id=902, quota=3)
+    assert calls == [] and not any(e.is_generated for e in out.values())
+
+
+def test_earlier_generated_reasons_are_loaded_per_user(db_session) -> None:
+    core_plan, inputs = _inputs(db_session)
+    first = inputs[0]["id"]
+    explanations = {first: client_mod.Explanation("以前的一句", "llm")}
+    _make(db_session, core_plan, explanations)
+    assert repo.load_generated_reasons(db_session, 1) == {first: "以前的一句"}
+    assert repo.load_generated_reasons(db_session, 2) == {}

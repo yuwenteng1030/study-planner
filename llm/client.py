@@ -66,6 +66,7 @@ def explain_task(
     key_points: list[str],
     static_note: str | None,
     model: str = DEFAULT_MODEL,
+    use_llm: bool = True,
 ) -> Explanation:
     """產生「為什麼該做這一題」。
 
@@ -74,7 +75,7 @@ def explain_task(
     """
     fallback = Explanation(static_note, "static") if static_note else Explanation("", "none")
 
-    if not is_available():
+    if not use_llm or not is_available():
         return fallback
 
     try:
@@ -119,33 +120,68 @@ EXPLAIN_WORKERS = 8
 EXPLAIN_TIMEOUT_SECONDS = 10.0
 
 
+#: 每位使用者每天最多為幾題呼叫 Claude 寫說明。一份計畫約 60 題，所以 150 夠排兩份全新的，
+#: 重排同一批題目靠 ``reuse`` 不重複呼叫，不會吃到額度。存在記憶體，重開伺服器歸零。
+EXPLAIN_DAILY_QUOTA = 150
+_explain_calls: dict[tuple[int, str], int] = {}
+
+
+def _reserve_explain_quota(user_id: int, wanted: int, quota: int) -> int:
+    """預留最多 ``wanted`` 次，回傳實際可用的次數（可能是 0）。"""
+    key = (user_id, _dt.date.today().isoformat())
+    with _quota_lock:
+        granted = max(0, min(wanted, quota - _explain_calls.get(key, 0)))
+        _explain_calls[key] = _explain_calls.get(key, 0) + granted
+        return granted
+
+
 def explain_many(
     tasks: list[dict],
     model: str = DEFAULT_MODEL,
+    *,
+    user_id: int | None = None,
+    quota: int = EXPLAIN_DAILY_QUOTA,
+    reuse: dict[int, str] | None = None,
 ) -> dict[int, Explanation]:
     """一次處理多題。
 
     ``tasks`` 每筆需要 ``id``／``title``／``topic_name``／``key_points``／
     ``static_note``。用執行緒並行呼叫（不用批次 API）；沒有 API key 時直接回傳
     預存說明，連執行緒都不開。**不要在資料庫交易裡呼叫它**，理由同 ``encourage``。
+
+    省錢的兩道閘：``reuse``（題目 id → 以前生成過的說明）命中就直接用、不呼叫；
+    給了 ``user_id`` 時每天最多為 ``quota`` 題呼叫，超過的退回預存說明。
     """
-    def one(task: dict) -> Explanation:
+    reuse = reuse or {}
+    out: dict[int, Explanation] = {
+        t["id"]: Explanation(reuse[t["id"]], "llm") for t in tasks if reuse.get(t["id"])
+    }
+    todo = [t for t in tasks if t["id"] not in out]
+    allowed = len(todo)
+    if user_id is not None and is_available() and todo:
+        allowed = _reserve_explain_quota(user_id, len(todo), quota)
+
+    def one(item: tuple[int, dict]) -> Explanation:
+        index, task = item
         return explain_task(
             title=task["title"],
             topic_name=task.get("topic_name", ""),
             key_points=task.get("key_points") or [],
             static_note=task.get("static_note"),
             model=model,
+            use_llm=index < allowed,
         )
 
-    if not is_available() or len(tasks) <= 1:
-        return {task["id"]: one(task) for task in tasks}
+    indexed = list(enumerate(todo))
+    if not is_available() or allowed <= 1:
+        results = [one(i) for i in indexed]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
 
-    from concurrent.futures import ThreadPoolExecutor
-
-    with ThreadPoolExecutor(max_workers=EXPLAIN_WORKERS) as pool:
-        results = list(pool.map(one, tasks))
-    return {task["id"]: result for task, result in zip(tasks, results)}
+        with ThreadPoolExecutor(max_workers=EXPLAIN_WORKERS) as pool:
+            results = list(pool.map(one, indexed))
+    out.update({task["id"]: r for task, r in zip(todo, results)})
+    return out
 
 
 # ---------------------------------------------------------------------------
