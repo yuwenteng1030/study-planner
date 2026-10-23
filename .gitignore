@@ -37,3 +37,6 @@ htmlcov/
 # Claude Code 的本機設定與 worktree（個人環境，不進公開 repo）
 .claude/settings.local.json
 .claude/worktrees/
+
+# 個人規劃文件（含求職細節，repo 是公開的，不進版控）
+docs/planning/
