@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from core import clock
@@ -20,7 +20,7 @@ from core.calibration import Sample
 from core.game_map import PlanMarks
 from core.planner import Plan as CorePlan
 from core.planner import ScheduledItem, TaskInput, TopicNode
-from core.replanner import Replan
+from core.replanner import Replan, replan
 from core.review import ItemRecord
 from core.scoring import UserContext
 from db.models import Plan, PlanItem, ProgressEvent, Task, TaskCompletion, Topic, User
@@ -402,6 +402,47 @@ def mark_task_undone_for_user(session: Session, user_id: int, task_id: int) -> i
         )
     ).rowcount
     return len(items) + removed
+
+
+def ensure_replanned(session: Session, plan: Plan, today: _dt.date) -> Replan | None:
+    """每份計畫每天檢查一次要不要重排；有重排就回傳結果（給畫面說明），否則 ``None``。
+
+    原本「今日任務」頁每次打開都跑一次重排並寫入：兩個分頁同時開會各寫一筆重排事件，
+    而地圖與首頁看到的是還沒重排的計畫，同一天三頁說法不一。
+
+    落後只會在日子過去時發生，所以一天一次就夠。用**條件式 UPDATE** 搶
+    ``last_replanned_on`` 這一格：只有把它從「昨天以前」改成「今天」的那個交易會重排，
+    另一個分頁的 UPDATE 改到 0 列就直接返回。重排失敗時整個交易 rollback，
+    這一格也跟著退回，下次打開會再試。
+    """
+    claimed = session.execute(
+        update(Plan)
+        .where(
+            Plan.id == plan.id,
+            or_(Plan.last_replanned_on.is_(None), Plan.last_replanned_on < today),
+        )
+        .values(last_replanned_on=today)
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    if not claimed:
+        return None
+    plan.last_replanned_on = today
+
+    end_date = plan.start_date + _dt.timedelta(days=plan.days - 1)
+    result = replan(
+        items=to_scheduled_items(plan),
+        completed_task_ids=completed_task_ids(plan),
+        today=today,
+        end_date=end_date,
+        daily_minutes=plan.daily_minutes,
+        # 砍項目時不要砍掉保留項目的前置主題，否則會排出「先做後置」的計畫
+        prereq_closure=load_prereq_closure(session),
+    )
+    if not result.changed:
+        return None
+    apply_replan(session, plan, result, today)
+    session.flush()
+    return result
 
 
 def apply_replan(

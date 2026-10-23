@@ -249,14 +249,17 @@ def main() -> None:
         tasks = repo.load_task_inputs(session)
         urls = repo.load_task_urls(session)
         done_ids = repo.load_map_done_task_ids(session, get_current_user())
-        marks = repo.plan_marks(
-            repo.load_active_plan(session, get_current_user()),
-            repo.user_today(session, get_current_user()),
-        )
+        today = repo.user_today(session, get_current_user())
+        plan = repo.load_active_plan(session, get_current_user())
+        # 先檢查要不要重排，地圖上的「今天」才會跟今日任務頁一致
+        replanned = repo.ensure_replanned(session, plan, today) if plan is not None else None
+        marks = repo.plan_marks(plan, today)
 
     if not tasks:
         st.info("還沒有題庫。先執行 `python -m scripts.import_data` 匯入題庫。")
         return
+    if replanned is not None:
+        st.info("你有進度落後，已經把未完成的題目重排到今天之後。細節在「今日任務」頁。", icon="🔁")
 
     levels = build_map(topics, tasks, done_ids)
     stages = build_stages(levels, tasks, done_ids)

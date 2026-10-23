@@ -19,7 +19,6 @@ if str(_ROOT) not in sys.path:
 
 from api.deps import get_current_user  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
-from core.replanner import replan  # noqa: E402
 from db import repositories as repo  # noqa: E402
 from db.session import session_scope  # noqa: E402
 from llm.client import encourage  # noqa: E402
@@ -97,21 +96,10 @@ def _render_page() -> None:
 
         end_date = plan.start_date + _dt.timedelta(days=plan.days - 1)
 
-        # 落後就重排。沒落後時 replan 會回 changed=False，不動任何東西——
-        # 每次開頁都重排會讓計畫看起來不穩定，使用者就不會信任它。
-        result = replan(
-            items=repo.to_scheduled_items(plan),
-            completed_task_ids=repo.completed_task_ids(plan),
-            today=today,
-            end_date=end_date,
-            daily_minutes=plan.daily_minutes,
-            # 砍項目時不要砍掉保留項目的前置主題，否則會排出
-            # 「先做後置」的計畫。
-            prereq_closure=repo.load_prereq_closure(session),
-        )
-        if result.changed:
-            repo.apply_replan(session, plan, result, today)
-            session.flush()
+        # 落後就重排，每份計畫每天最多一次（見 repo.ensure_replanned）。
+        # 沒落後時不動任何東西——每次開頁都重排會讓計畫看起來不穩定，使用者就不會信任它。
+        result = repo.ensure_replanned(session, plan, today)
+        if result is not None:
             _report_replan(result)
 
         summary = repo.progress_summary(plan, today)
