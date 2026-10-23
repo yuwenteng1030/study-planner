@@ -532,7 +532,7 @@ def render_svg(
         # 動物：大部分時間站著，偶爾跳一下
         "@keyframes hop{0%,72%,100%{transform:translateY(0)}80%{transform:translateY(-5px)}88%{transform:translateY(0)}}"
         ".npc-hop{animation:hop 2.4s ease-in-out infinite}"
-        ".npc{cursor:help}"
+        ".npc{cursor:pointer}"
         "@keyframes breathe{0%,100%{opacity:.95}50%{opacity:.35}}"
         ".bear-bob{animation:bob 1.6s ease-in-out infinite}"
         ".halo{animation:breathe 1.8s ease-in-out infinite}"

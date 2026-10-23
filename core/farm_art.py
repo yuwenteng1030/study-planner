@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from html import escape
+
 #: 顏色（溫暖的農村配色）
 GRASS = "#8CC152"
 GRASS_DARK = "#6FA33D"
@@ -592,15 +594,15 @@ NPC_ORDER = ("chicken", "sheep", "rabbit", "cow", "cat", "duck", "pig", "dog")
 
 def npc(kind: str, x: float, y: float, delay: float = 0.0) -> str:
     """一隻動物，``(x, y)`` 是腳底中心。會跳的動物加上 ``npc-hop``（尊重「減少動態」）。
-    滑鼠移上去會出現一句話（SVG 的 ``<title>``），所以動物本身可以被指到，但不會擋到關卡——
-    牠們只放在離關卡和小路都夠遠的空地上。"""
+    牠要說的話放在 ``data-line``：頁面的 JavaScript 一次挑一隻看得到的動物，在牠頭上顯示對話泡泡，
+    每幾秒換一隻（點動物也會讓牠馬上說話）。動物只放在離關卡和小路都夠遠的空地上，點牠不會點到關卡。"""
     draw, line, hops = NPCS[kind]
     cls = "npc npc-hop" if hops else "npc"
     # 每隻跳的時間錯開，不會整片同步跳
     style = f' style="animation-delay:-{delay:.1f}s"' if hops else ""
     return (
-        f'<g class="{cls}" data-npc="{kind}" data-x="{x:.1f}" data-y="{y:.1f}"{style}>'
-        f"<title>{line}</title>"
+        f'<g class="{cls}" data-npc="{kind}" data-x="{x:.1f}" data-y="{y:.1f}" '
+        f'data-line="{escape(line, quote=True)}"{style}>'
         + shadow(x + 2, y + 1, 10, 3, 0.22)
         # 以腳底為中心放大：地圖縮在畫面上時原尺寸太小
         + f'<g transform="translate({x:.1f},{y:.1f}) scale({NPC_SCALE}) translate({-x:.1f},{-y:.1f})">'

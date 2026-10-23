@@ -69,6 +69,18 @@ _MAP_CSS = """
   font: 13px/1.45 system-ui, sans-serif;
 }
 .card .cheer { font-weight: 700; color: #B86B00; margin-bottom: 4px; }
+.npc-bubble {
+  position: absolute; z-index: 1; pointer-events: none;
+  transform: translate(-50%, -100%); white-space: nowrap;
+  background: #FFFDF7; color: #4A3728; border: 2px solid #E8A33A; border-radius: 12px;
+  padding: 4px 10px; font: 600 12.5px/1.4 system-ui, sans-serif;
+  box-shadow: 0 4px 10px rgba(0,0,0,.18); transition: opacity .3s ease;
+}
+.npc-bubble::after {
+  content: ""; position: absolute; left: 50%; bottom: -8px; margin-left: -6px;
+  border: 6px solid transparent; border-top-color: #E8A33A; border-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) { .npc-bubble { transition: none; } }
 .card .adv-line { font-weight: 700; color: #2F7FD1; margin: -4px 0 8px; font-variant-numeric: tabular-nums; }
 .card .title { font-weight: 700; font-size: 14px; margin-right: 18px; }
 .card .meta { opacity: .75; margin: 2px 0 8px; }
@@ -193,6 +205,46 @@ export default function (component) {
     }
   }
 
+  // 動物說話：一次只有一隻，挑畫面上看得到的，每 6 秒換一隻；點動物會讓牠馬上說。
+  // 泡泡是蓋在地圖上的 HTML（不在 svg 裡），傾斜的盤面上字也不會跟著斜。
+  if (parentElement.__npcTimer) clearInterval(parentElement.__npcTimer);
+  const npcs = Array.from(root.querySelectorAll('.npc[data-line]'));
+  const bubble = document.createElement('div');
+  bubble.className = 'npc-bubble';
+  bubble.style.opacity = '0';
+  root.appendChild(bubble);
+  let turn = Math.floor(Math.random() * Math.max(npcs.length, 1));
+  const speak = (npc) => {
+    if (!npc || root.querySelector('.card')) { bubble.style.opacity = '0'; return; }
+    const box = root.getBoundingClientRect();
+    const r = npc.getBoundingClientRect();
+    bubble.textContent = npc.getAttribute('data-line');
+    const half = bubble.offsetWidth / 2;
+    const cx = Math.max(half + 4, Math.min(r.left - box.left + r.width / 2, box.width - half - 4));
+    bubble.style.left = `${cx}px`;
+    bubble.style.top = `${r.top - box.top - 6}px`;
+    bubble.style.opacity = '1';
+  };
+  const visible = () => npcs.filter((n) => {
+    const r = n.getBoundingClientRect();
+    return r.bottom > 60 && r.top < window.innerHeight - 20;
+  });
+  const next = () => {
+    const pool = visible();
+    if (!pool.length) { bubble.style.opacity = '0'; return; }
+    turn = (turn + 1) % pool.length;
+    speak(pool[turn]);
+  };
+  npcs.forEach((n) => n.addEventListener('click', () => {
+    speak(n);
+    clearInterval(parentElement.__npcTimer);
+    parentElement.__npcTimer = setInterval(next, 6000);
+  }));
+  if (npcs.length) {
+    setTimeout(next, 900);
+    parentElement.__npcTimer = setInterval(next, 6000);
+  }
+
   // 小熊換了位置（第一次打開、或剛破關）才捲過去；點別的關卡不要把畫面拉走
   // 稍等再捲、而且不用 smooth：元件剛掛上時頁面其他元素還在排版，
   // 平滑捲動會被接著來的版面變動打斷，結果停在頁首（手機寬度上實測過）
@@ -207,6 +259,7 @@ export default function (component) {
   // 元件拿掉時停掉計時器（換頁、重新整理），不留下沒人看的 setInterval
   return () => {
     if (parentElement.__advTimer) clearInterval(parentElement.__advTimer);
+    if (parentElement.__npcTimer) clearInterval(parentElement.__npcTimer);
   };
 }
 """

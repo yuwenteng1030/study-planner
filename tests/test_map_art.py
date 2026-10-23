@@ -420,3 +420,13 @@ def test_npcs_live_on_the_grass_not_on_the_road_or_islands(topics, tasks) -> Non
             assert 12 <= x <= WIDTH - 12, (kind, x)  # 不能被地圖邊緣切掉
             assert min(((x - a) ** 2 + (y - 8 - b) ** 2) ** 0.5 for a, b in road) >= 16, (kind, x, y)
             assert all(((x - p.x) ** 2 + (y - 8 - p.y) ** 2) ** 0.5 >= 30 for p in placed), (kind, x, y)
+
+
+def test_npc_lines_are_data_for_the_speech_bubble_not_hover_tooltips() -> None:
+    """動物的話放在 data-line，給頁面一次挑一隻顯示對話泡泡；不再用滑鼠停留才出現的 <title>。"""
+    from core import farm_art
+
+    for kind in farm_art.NPC_ORDER:
+        g = _parse(f'<svg xmlns="http://www.w3.org/2000/svg">{farm_art.npc(kind, 50, 50)}</svg>')[0]
+        assert g.get("data-line") and "：" in g.get("data-line")
+        assert g.find("svg:title", NS) is None
