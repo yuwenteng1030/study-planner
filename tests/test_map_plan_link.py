@@ -168,3 +168,24 @@ def test_skipped_items_are_not_marked(db_session) -> None:
 
 def test_no_plan_gives_empty_marks() -> None:
     assert repo.plan_marks(None, _dt.date(2026, 10, 25)) == PlanMarks()
+
+
+def test_todays_unfinished_levels_are_enlarged_and_bounce() -> None:
+    """今天還沒做的關卡要一眼看得到：包在會跳的群組裡、有光暈；今天做完的只留細藍圈。"""
+    from core.game_map import Stage as _Stage
+
+    stages = [
+        _Stage(task_id=i, title=f"T{i}", difficulty="Easy", topic_id="arrays", topic_name="Arrays",
+               zone=0, done=(i == 2))
+        for i in (1, 2, 3)
+    ]
+    urls = {i: f"{HR}t{i}/problem" for i in (1, 2, 3)}
+    svg = render_svg(stages, urls, here_id=1, today_ids={1, 2})
+    root = ET.fromstring(svg)
+    by_task = {int(e.get("data-task")): e for e in root.iter() if e.get("data-task")}
+    pops = {t for t, e in by_task.items() if any("today-pop" in (c.get("class") or "") for c in e.iter())}
+    assert pops == {1}, "只有今天還沒做的那關會跳"
+    assert "today-live" in by_task[1].get("class")
+    assert "today-live" not in by_task[2].get("class") and "today" in by_task[2].get("class")
+    assert "today" not in by_task[3].get("class")
+    assert ".today-pop" in svg.split("prefers-reduced-motion")[1], "系統設定減少動態時不跳"

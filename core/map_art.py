@@ -394,10 +394,13 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
         f"{'，冒險中' if adventuring else ''}）"
     )
 
+    # 今天還沒做的關卡：放大、一直跳，底下一圈會呼吸的藍色光暈（2026-10-24 使用者回報藍圈不明顯）。
+    # 今天已經做完的關卡回到原本大小、只留細藍圈，注意力才會集中在還沒做的那幾關。
+    live = plan_tag == "today" and not s.done
     classes = (
         "stage" + (" done" if s.done else "") + (" here" if is_here else "")
         + (" boss" if boss else "") + (" adventuring" if adventuring else "")
-        + (f" {plan_tag}" if plan_tag else "")
+        + (f" {plan_tag}" if plan_tag else "") + (" today-live" if live else "")
     )
     # 有網址就是真的 <a>：就算畫面的 JavaScript 沒跑起來，點下去照樣能開題目
     href = (
@@ -414,12 +417,22 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
         # 透明的點擊範圍：整座小島加上地標都點得到
         f'<rect x="{x - rx:.1f}" y="{y - 34:.1f}" width="{2 * rx}" height="58" fill="#000" opacity="0"/>',
     ]
-    if plan_tag:
+    if live:
+        # 光暈與藍圈畫在地上不跟著跳，像影子；跳的是上面的小島
+        parts.append(
+            f'<ellipse class="today-glow" cx="{x:.1f}" cy="{iy + 2:.1f}" rx="{rx + 14}" ry="19" '
+            f'fill="{TODAY_RING}" opacity="0.35"/>'
+            f'<ellipse class="plan-ring" cx="{x:.1f}" cy="{iy:.1f}" rx="{rx + 10}" ry="17" fill="none" '
+            f'stroke="{TODAY_RING}" stroke-width="4"/>'
+        )
+    elif plan_tag:
         ring = TODAY_RING if plan_tag == "today" else OVERDUE_RING
         parts.append(
             f'<ellipse class="plan-ring" cx="{x:.1f}" cy="{iy:.1f}" rx="{rx + 6}" ry="16" fill="none" '
             f'stroke="{ring}" stroke-width="3"/>'
         )
+    if live:
+        parts.append('<g class="today-pop">')
     top = "#EBD27A" if s.done else farm_art.GRASS_LIGHT
     parts.append(
         '<g class="platform">'
@@ -447,6 +460,8 @@ def _node(p: Placed, url: str | None, is_here: bool, plan_tag: str = "", *,
         parts.append(f'<text x="{x - 14:.1f}" y="{y + 22:.1f}" class="crown">👑</text>')
     if focus:
         parts.append(f'<text x="{x + rx - 4:.1f}" y="{y - 6:.1f}" class="focus-star">⭐</text>')
+    if live:
+        parts.append("</g>")
     if adventuring:
         # 冒險中的旗子＋計時（秒數由頁面的 JavaScript 即時更新 .adv-time）
         # 放在小島右側、跟小島同高：放上面會蓋到上一排的編號小牌和自己的地標
@@ -536,7 +551,14 @@ def render_svg(
         "@keyframes breathe{0%,100%{opacity:.95}50%{opacity:.35}}"
         ".bear-bob{animation:bob 1.6s ease-in-out infinite}"
         ".halo{animation:breathe 1.8s ease-in-out infinite}"
-        "@media (prefers-reduced-motion: reduce){.bear-bob,.halo,.adventure-flag,.npc-hop{animation:none}"
+        # 今天還沒做的關卡：放大 1.2 倍、以島底為中心一直跳；底下的光暈跟著呼吸
+        ".today-pop{transform-box:fill-box;transform-origin:50% 100%;transform:scale(1.2);"
+        "animation:todayhop 1.3s ease-in-out infinite}"
+        "@keyframes todayhop{0%,100%{transform:scale(1.2) translateY(0)}"
+        "45%{transform:scale(1.2) translateY(-7px)}60%{transform:scale(1.2) translateY(-7px)}}"
+        ".today-glow{animation:breathe 1.3s ease-in-out infinite}"
+        "@media (prefers-reduced-motion: reduce){.bear-bob,.halo,.adventure-flag,.npc-hop,.today-pop,.today-glow"
+        "{animation:none}"
         ".stage .platform{transition:none}}"
         "</style>",
     ]

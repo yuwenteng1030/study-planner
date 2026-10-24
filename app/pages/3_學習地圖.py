@@ -519,7 +519,8 @@ def main() -> None:
         today_left = sum(1 for t in marks.today if t in all_by_id and not all_by_id[t].done)
         hidden = sum(1 for t in marks.today if t not in by_id)
         st.caption(
-            f"🔵 藍圈＝今天的任務（還剩 {today_left} / {len(marks.today)} 題）"
+            f"🔵 會跳、放大、藍色光圈的關卡＝今天還沒做的任務（還剩 {today_left} / {len(marks.today)} 題；"
+            "今天做完的留細藍圈）。今天的題目照排程挑，在地圖上不一定相鄰"
             + (f"，其中 {hidden} 題不在重點路線上（切到上面的「整個題庫」就看得到）" if hidden else "")
             + (f"　🔴 紅圈＝過期還沒做（{len(marks.overdue)} 題，到「今日任務」按重排）" if marks.overdue else "")
         )
