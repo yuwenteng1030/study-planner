@@ -433,9 +433,19 @@ class JobDescription(Base):
 
     #: 原文網址（選填）。只收 http(s)，見 ``repositories.save_jd``。
     source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    #: ``user``（使用者貼的）或 ``search``（從 JD 自動搜尋社群找到的，見 ``llm/community.py``）。
+    origin: Mapped[str] = mapped_column(String(10), nullable=False, default="user", server_default="user")
+
+    #: 自動搜尋時 Claude 依原文整理的結論。``body`` 只放引用的原文，兩者分開存，
+    #: 畫面上才分得出哪句是原文、哪句是 Claude 寫的。
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[_dt.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
 
-    __table_args__ = (CheckConstraint("kind IN ('jd', 'post')", name="ck_jds_kind"),)
+    __table_args__ = (
+        CheckConstraint("kind IN ('jd', 'post')", name="ck_jds_kind"),
+        CheckConstraint("origin IN ('user', 'search')", name="ck_jds_origin"),
+    )

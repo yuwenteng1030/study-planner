@@ -25,7 +25,13 @@ from core.jd_parser import MAX_JD_CHARS, Mention, analyze, md_escape  # noqa: E4
 from core.jd_parser import highlight_markdown as highlighted  # noqa: E402
 from core.scoring import jd_factor  # noqa: E402
 from db import repositories as repo  # noqa: E402
+from db.quota import DbLedger  # noqa: E402
 from db.session import session_scope  # noqa: E402
+from llm import client as llm_client  # noqa: E402
+from llm import community  # noqa: E402
+
+# 社群搜尋的每日次數記在資料庫（重開伺服器不歸零）
+llm_client.use_ledger(DbLedger())
 
 st.set_page_config(page_title="職缺與面經", page_icon="📄", layout="centered")
 
@@ -45,12 +51,14 @@ def main() -> None:
     user_id = get_current_user()
 
     _show_form(user_id)
+    _show_community_search(user_id)
 
     with session_scope() as session:
         analyses = repo.load_jd_analyses(session, user_id)
         topic_names = {t.id: t.name for t in repo.load_topic_nodes(session)}
         stats = repo.load_jd_stats(session, user_id)
         rows = [(jd.id, jd.kind, jd.title, jd.source_url, jd.body, jd.created_at, a) for jd, a in analyses]
+        summaries = {jd.id: (jd.origin, jd.summary) for jd, _a in analyses}
 
     if not rows:
         st.info(
@@ -67,9 +75,58 @@ def main() -> None:
     st.divider()
     _show_topics(posts, f"這 {len(posts)} 篇面經說考了什麼", topic_names, stats=None)
     st.divider()
-    _show_saved(user_id, rows, topic_names)
+    _show_saved(user_id, rows, topic_names, summaries)
 
 
+def _show_community_search(user_id: int) -> None:
+    """從存好的 JD 自動去社群找面經（Claude 網路搜尋），找到的存成面經。"""
+    with session_scope() as session:
+        jds = [(jd.id, jd.title, jd.body) for jd in repo.load_jds(session, user_id) if jd.kind == repo.KIND_JD]
+    if not jds:
+        return
+    st.subheader("🔎 從 JD 找社群面經")
+    st.caption(
+        f"Claude 會依 JD 判斷公司與職缺，到 {'、'.join(community.COMMUNITY_DOMAINS)} 搜尋考試與面試心得，"
+        "整理出考了哪些題型，每一句都附原文出處。找到的會存成面經（只參考、不進排序）。"
+        f"每次最多搜尋 {community.MAX_SEARCHES} 次、約需半分鐘；每天最多 {community.COMMUNITY_DAILY_QUOTA} 次。"
+    )
+    available = llm_client.is_available()
+    if not available:
+        st.info(
+            "這個功能要用 Claude 搜尋網路：本機要設定 `ANTHROPIC_API_KEY`；公開展示版不開放"
+            "（避免陌生人花掉部署者的錢）。沒有 key 也可以自己把讀到的心得貼進上面的表單。",
+            icon="🔑",
+        )
+    by_id = {jd_id: (title, body) for jd_id, title, body in jds}
+    choice = st.selectbox("用哪一份 JD 找", list(by_id), format_func=lambda i: by_id[i][0], key="community_jd")
+    hint = st.text_input(
+        "補充公司或職缺（選填，JD 裡沒寫公司名稱時很有用）", max_chars=200, key="community_hint",
+        placeholder="例如：某半導體公司 IT 應用系統工程師",
+    )
+    if not st.button("🔎 搜尋社群面經", disabled=not available, type="primary"):
+        return
+    title, body = by_id[choice]
+    # 在交易外呼叫：搜尋要等半分鐘以上，不能抓著資料庫的寫入鎖
+    with st.spinner("Claude 正在搜尋社群上的面試心得……"):
+        report = community.search_community(body, user_id=user_id, hint=hint)
+    if report.status != "ok":
+        (st.warning if report.status in ("empty", "quota") else st.error)(report.message)
+        if report.queries:
+            st.caption("搜尋過：" + "、".join(md_escape(q) for q in report.queries))
+        return
+    with session_scope() as session:
+        saved, skipped = repo.save_community_findings(session, user_id, report)
+    st.success(
+        f"從「{md_escape(title)}」找到 {len(report.by_url())} 篇相關心得，新存了 {saved} 篇"
+        + (f"（{skipped} 篇之前存過或已存滿）" if skipped else "")
+        + "。下面「面經說考了什麼」已經更新。"
+    )
+    with st.expander("Claude 的整理（每句都附原文出處）", expanded=True):
+        for finding in report.findings:
+            links = "、".join(_attribution(src.title, src.url) for src in finding.sources)
+            st.markdown(f"- {md_escape(finding.claim)}　— {links}")
+        if report.queries:
+            st.caption("搜尋過：" + "、".join(md_escape(q) for q in report.queries))
 _SAVED_KEY = "jd_saved_message"
 _FORM_ROUND_KEY = "jd_form_round"
 
@@ -176,13 +233,19 @@ def _show_other_skills(rows) -> None:
         )
 
 
-def _show_saved(user_id: int, rows, topic_names: dict[str, str]) -> None:
+def _show_saved(user_id: int, rows, topic_names: dict[str, str], summaries) -> None:
     st.subheader("已存的 JD 與面經")
     for jd_id, kind, title, url, body, created_at, analysis in rows:
         names = "、".join(topic_names.get(t, t) for t in analysis.topics) or "沒有比對到主題"
-        icon = "📄" if kind == repo.KIND_JD else "💬"
+        origin, summary = summaries.get(jd_id, ("user", None))
+        icon = "📄" if kind == repo.KIND_JD else ("🔎" if origin == "search" else "💬")
         with st.expander(f"{icon} {md_escape(title)}（{created_at:%m/%d}）"):
             st.caption(f"提到：{names}")
+            if summary:
+                st.markdown("**✨ Claude 依原文整理**（不是原文）")
+                for line in summary.splitlines():
+                    st.markdown(f"- {md_escape(line)}")
+                st.markdown("**引用的原文**")
             if url:
                 st.markdown(f"原文：{_attribution(url, url)}")
             st.text(body if len(body) <= 3000 else body[:3000] + "\n…")

@@ -839,6 +839,37 @@ def save_jd(
     return jd
 
 
+def save_community_findings(session: Session, user_id: int, report) -> tuple[int, int]:  # noqa: ANN001
+    """把自動搜尋找到的社群面經存成 ``post``：一個網址一篇，``body`` 是引用的原文、
+    ``summary`` 是 Claude 的整理。已經存過的網址跳過；存滿就停。回傳 (存了幾篇, 跳過幾篇)。
+
+    ``report`` 是 ``llm.community.CommunityReport``（db 不 import llm，靠鴨子型別）。
+    """
+    existing = set(
+        session.scalars(
+            select(JobDescription.source_url).where(
+                JobDescription.user_id == user_id, JobDescription.source_url.is_not(None)
+            )
+        )
+    )
+    saved = skipped = 0
+    for url, (title, texts, claims) in report.by_url().items():
+        if url in existing or not texts:
+            skipped += 1
+            continue
+        try:
+            jd = save_jd(session, user_id, title, "\n".join(texts), kind=KIND_POST, source_url=url)
+        except ValueError:
+            skipped += 1  # 存滿、或網址不合格（白名單已擋過，這裡是第二道）
+            continue
+        jd.origin = "search"
+        jd.summary = "\n".join(claims)
+        existing.add(url)
+        saved += 1
+    session.flush()
+    return saved, skipped
+
+
 def load_jds(session: Session, user_id: int) -> list[JobDescription]:
     """這位使用者的所有 JD，新的在前。"""
     return list(
@@ -895,7 +926,8 @@ def load_jd_citations(
 #: 3：時間戳一律是 UTC 並標上 ``+00:00``；``user.tz`` 是使用者的時區（2026-10-23）。
 #: 4：加上 ``jds``（使用者貼上的職缺描述原文）（2026-10-24）。
 #: 5：``jds`` 每份加上 ``kind``（jd／post）與 ``source_url``（2026-10-24，社群面經）。
-EXPORT_FORMAT_VERSION = 5
+#: 6：``jds`` 每份加上 ``origin``（user／search）與 ``summary``（2026-10-24，自動搜尋社群面經）。
+EXPORT_FORMAT_VERSION = 6
 
 #: 帳號被刪掉後重建時用的預設值。與 ``scripts/import_data.py`` 的 SEED_USER 一致。
 _FALLBACK_EMAIL = "owner@localhost"
@@ -1047,8 +1079,9 @@ def export_user_data(session: Session, user_id: int) -> dict:
         ],
         "jds": [
             {
-                "id": jd.id, "kind": jd.kind, "title": jd.title, "source_url": jd.source_url,
-                "body": jd.body, "created_at": _iso(jd.created_at),
+                "id": jd.id, "kind": jd.kind, "origin": jd.origin, "title": jd.title,
+                "source_url": jd.source_url, "body": jd.body, "summary": jd.summary,
+                "created_at": _iso(jd.created_at),
             }
             for jd in jds
         ],

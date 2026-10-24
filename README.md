@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、每日提醒（行事曆檔）、公開展示版皆可運作，397 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、從 JD 自動找社群面經、每日提醒（行事曆檔）、公開展示版皆可運作，407 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -205,6 +205,18 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 
 **代價**：面經裡的資訊要靠人判斷才會進到計畫裡，網站不會自動「學」到最新的考法。
 
+### 17. 從 JD 自動找社群面經：交給 Claude 的網路搜尋，只收對得回原文的結論
+
+「職缺與面經」頁存好 JD 之後，按「🔎 搜尋社群面經」：Claude 從 JD 判斷公司與職缺，用 web search 工具在 Dcard、PTT、Threads、GoodJob、HackMD、Medium 搜尋考試與面試心得，整理出考了哪些題型（`llm/community.py`）。找到的每個網址存成一篇面經（`jds.origin = 'search'`），之後跟手動貼的面經一樣顯示在頁面與任務卡上。
+
+- **不自己寫爬蟲**：Dcard 會擋機器人、Threads 要登入，自己爬就得繞過這些。web search 查的是搜尋引擎已經公開收錄的內容，由 Anthropic 那邊去查。
+- **只收對得回原文的結論**：Claude 的每一句都要附 `web_search_result_location` 引用。程式只留下「引用的網址真的出現在這次搜尋結果裡、而且網域在白名單內」的句子，模型自己編的網址會被丟掉（`test_only_citations_backed_by_this_searchs_results_are_kept`）。
+- **原文與整理分開存**：`body` 只放引用的原文片段（每段最多 150 字），關鍵字比對與「面經說考了什麼」用的是原文；Claude 的整理存在 `summary`，畫面上標「✨ Claude 依原文整理（不是原文）」。
+- **用 Opus**：要判斷「這篇講的是不是同一間公司、同類職缺的考試」，需要推理能力；每次最多搜尋 5 次。
+- **要錢，所以有上限**：每次搜尋 US$0.01 加上讀結果的 token，每人每天最多 3 次，失敗不算次數。公開展示版不開放（同設計決策 13）。
+
+**代價**：搜尋引擎沒收錄的貼文找不到（IG、要登入的 Threads）；結果跟搜尋引擎當下的排序有關，同一份 JD 隔天找可能不一樣。**這個功能在開發時沒有實際打過 API**（開發環境沒有 key），只用照 API 文件形狀做的假回應測過；第一次真的使用時要看一下結果與花費。
+
 ## 排程規則
 
 1. **前置先排**：某主題的題目不得排在它的前置主題的題目之前。
@@ -245,7 +257,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 397 個測試
+pytest -q                          # 407 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
@@ -308,6 +320,7 @@ STUDY_PLANNER_DEMO=1 DATABASE_URL=sqlite:///demo.db streamlit run app/Home.py
 | `tests/test_quota_db.py` | 額度存資料庫：重開不歸零、退回沒用到的次數、不同用途分開算 |
 | `tests/test_game_map.py`（續） | 重點路線依階段分區、經驗值（Easy 10／Medium 25／Hard 50）、重點題組 30 題且 Medium 過半 |
 | `tests/test_adventure.py` | 冒險計時：分鐘無條件進位且有上限、同一題重按不重新計時、換題重新計時、打勾自動記分鐘（自己填的優先）、地圖計畫外完成也記分鐘並算進估時校正、刪帳號一併刪除 |
+| `tests/test_community.py` | 自動找社群面經：只收搜尋結果裡真的有、而且在白名單內的引用、請求限定社群網域、暫停後原封不動接著跑、每日次數、失敗退回次數、找不到時說明、原文與整理分開存、同網址不重複存、沒 key 時頁面說明原因 |
 | `tests/test_jd.py` | JD 與面經：面經不進排序、原文網址只收 http(s)、面經的寫法（DP、背包、雙指標）認得出來、引用一定是原文並指到關鍵字、長得像的詞不算（tech stack、Main Street）、泛稱不加分、題庫外技能另列、一份只算一次、markdown 不能注入、只刪得到自己的、清紀錄保留 JD、貼了 JD 的主題真的排得比較前面、頁面存檔與展示版範例 JD |
 | `tests/test_calendar_export.py` | 每日提醒：一天一個事件、昨天的不匯出、台北時間換成 UTC、長度是當天總分鐘數、逗號分號跳脫、75 位元組折行不切壞中文、今日任務頁有下載 |
 | `tests/test_demo.py` | 公開展示版：每個分頁一個訪客、範例計畫只留昨天一題沒做而且重排不會超時、過期只清訪客、展示版不呼叫 Claude、空資料庫自動匯入題庫、五個頁面對新訪客都畫得出來 |

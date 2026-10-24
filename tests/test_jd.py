@@ -182,7 +182,7 @@ def test_export_includes_jds_and_clearing_records_keeps_them(db_session) -> None
     _user(db_session)
     repo.save_jd(db_session, 1, "後端 A", "需要 Python")
     export = repo.export_user_data(db_session, 1)
-    assert export["format_version"] == 5
+    assert export["format_version"] == 6
     assert export["jds"][0]["kind"] == "jd" and export["jds"][0]["source_url"] is None
     assert export["jds"][0]["title"] == "後端 A" and export["jds"][0]["body"] == "需要 Python"
 
