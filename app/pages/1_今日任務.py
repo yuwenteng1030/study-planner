@@ -18,6 +18,8 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from api.deps import get_current_user, show_demo_notice  # noqa: E402
+from core import clock  # noqa: E402
+from core.calendar_export import DayTask, build_ics  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from core.jd_parser import highlight_markdown, md_escape  # noqa: E402
 from db import repositories as repo  # noqa: E402
@@ -133,6 +135,7 @@ def _render_page() -> None:
             with progress_slot:
                 _show_progress(summary, plan, end_date, today)
             _show_empty_day(plan, today, end_date)
+            _show_calendar(plan, today, repo.user_tz(session, user_id))
             return
 
         st.subheader(f"{today:%m/%d}（{summary['today_minutes']} 分鐘）")
@@ -154,6 +157,7 @@ def _render_page() -> None:
             _show_progress(repo.progress_summary(plan, today), plan, end_date, today)
 
         _show_upcoming(plan, today)
+        _show_calendar(plan, today, repo.user_tz(session, user_id))
 
 
 def _report_replan(result) -> None:
@@ -353,6 +357,44 @@ def _show_upcoming(plan, today: _dt.date) -> None:
             st.markdown(f"**{day:%m/%d}**　{len(items)} 題 / {total} 分鐘")
             for i in items:
                 st.write(f"　- {i.task.title}（{i.task.difficulty}）")
+
+
+
+def _show_calendar(plan, today: _dt.date, tz: str) -> None:
+    """每日提醒：下載行事曆檔，匯入手機的行事曆，每天練題時間前 10 分鐘跳通知。
+
+    不寄信的理由寫在 ``core/calendar_export.py``。
+    """
+    with st.expander("📅 每日提醒：加到我的行事曆"):
+        st.caption(
+            "下載後用 Google／Apple／Outlook 行事曆匯入，每天會有一個「今天 n 題」的事件，"
+            "開始前 10 分鐘提醒，裡面列著題目與連結。計畫重排後日子會變，重新下載匯入一次就好"
+            "（同一天的事件會被更新，不會多一份）。"
+        )
+        start_at = st.time_input("每天幾點開始練？", value=_dt.time(20, 0), step=900, key="ics_start_at")
+        tasks = [
+            DayTask(
+                day=i.scheduled_date,
+                title=i.task.title,
+                difficulty=i.task.difficulty,
+                est_minutes=i.task.est_minutes,
+                url=i.task.url,
+            )
+            for i in sorted(plan.items, key=lambda i: (i.scheduled_date, i.order_in_day))
+            if i.status == "todo"
+        ]
+        if not any(t.day >= today for t in tasks):
+            st.info("今天以後沒有還沒做的題目，沒有東西可以提醒。")
+            return
+        ics = build_ics(
+            tasks, plan_id=plan.id, start_at=start_at, tz=tz, today=today, now_utc=clock.utc_now()
+        )
+        st.download_button(
+            "下載行事曆檔（.ics）",
+            data=ics.encode("utf-8"),
+            file_name=f"study-plan-{today:%Y%m%d}.ics",
+            mime="text/calendar",
+        )
 
 
 main()

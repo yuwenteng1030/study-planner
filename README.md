@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、公開展示版皆可運作，377 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、每日提醒（行事曆檔）、公開展示版皆可運作，381 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -184,6 +184,14 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 
 **代價**：漏抓。JD 寫「處理大量交易資料」不會被算成 arrays，英文以外只認繁簡中文的固定詞。v0.3 的 RAG 可以補這塊，但出處仍然要能對回原文。
 
+### 15. 每日提醒用行事曆檔，不寄信
+
+「今日任務」頁可以下載 `.ics`，匯入 Google／Apple／Outlook 行事曆後，每天在使用者選的時間有一個「今天 n 題」的事件，開始前 10 分鐘提醒，裡面列著題目與連結（`core/calendar_export.py`）。
+
+不寄信：寄信要寄件服務、要存使用者信箱、要排程器每天跑，公開展示版也不該替陌生人寄信。提醒交給使用者自己的行事曆，手機會跳通知，不想要了自己刪掉就好。
+
+**代價**：重排後行事曆不會自己更新，要重新下載匯入一次。每個事件的 UID 固定是「計畫＋日期」，多數行事曆重新匯入時會更新同一天的事件，不會多出一份。
+
 ## 排程規則
 
 1. **前置先排**：某主題的題目不得排在它的前置主題的題目之前。
@@ -224,7 +232,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 377 個測試
+pytest -q                          # 381 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
@@ -288,6 +296,7 @@ STUDY_PLANNER_DEMO=1 DATABASE_URL=sqlite:///demo.db streamlit run app/Home.py
 | `tests/test_game_map.py`（續） | 重點路線依階段分區、經驗值（Easy 10／Medium 25／Hard 50）、重點題組 30 題且 Medium 過半 |
 | `tests/test_adventure.py` | 冒險計時：分鐘無條件進位且有上限、同一題重按不重新計時、換題重新計時、打勾自動記分鐘（自己填的優先）、地圖計畫外完成也記分鐘並算進估時校正、刪帳號一併刪除 |
 | `tests/test_jd.py` | JD 出處：引用一定是原文並指到關鍵字、長得像的詞不算（tech stack、Main Street）、泛稱不加分、題庫外技能另列、一份只算一次、markdown 不能注入、只刪得到自己的、清紀錄保留 JD、貼了 JD 的主題真的排得比較前面、頁面存檔與展示版範例 JD |
+| `tests/test_calendar_export.py` | 每日提醒：一天一個事件、昨天的不匯出、台北時間換成 UTC、長度是當天總分鐘數、逗號分號跳脫、75 位元組折行不切壞中文、今日任務頁有下載 |
 | `tests/test_demo.py` | 公開展示版：每個分頁一個訪客、範例計畫只留昨天一題沒做而且重排不會超時、過期只清訪客、展示版不呼叫 Claude、空資料庫自動匯入題庫、五個頁面對新訪客都畫得出來 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
 
