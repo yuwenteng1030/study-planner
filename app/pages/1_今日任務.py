@@ -369,7 +369,7 @@ def _show_calendar(plan, today: _dt.date, tz: str) -> None:
         st.caption(
             "下載後用 Google／Apple／Outlook 行事曆匯入，每天會有一個「今天 n 題」的事件，"
             "開始前 10 分鐘提醒，裡面列著題目與連結。計畫重排後日子會變，重新下載匯入一次就好"
-            "（同一天的事件會被更新，不會多一份）。"
+            "（同一天的事件會被更新，不會多一份；重排後整天沒有題目的日子，舊事件要自己刪）。"
         )
         start_at = st.time_input("每天幾點開始練？", value=_dt.time(20, 0), step=900, key="ics_start_at")
         tasks = [

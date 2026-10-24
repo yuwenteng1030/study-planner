@@ -35,6 +35,7 @@ def test_one_event_per_day_from_today_with_an_alarm() -> None:
     assert lines.count("BEGIN:VEVENT") == 2, "昨天的不匯出；今天兩題合成一個事件"
     assert "UID:plan7-20261024@study-planner" in lines, "UID 固定，重新匯入會更新同一天"
     assert lines.count("TRIGGER:-PT10M") == 2
+    assert sum(line.startswith("SEQUENCE:") for line in lines) == 2, "重新匯入要能蓋過舊版"
 
 
 def test_times_are_converted_to_utc() -> None:
@@ -49,6 +50,8 @@ def test_text_is_escaped_and_lines_are_folded() -> None:
     description = next(line for line in _unfold(ics) if line.startswith("DESCRIPTION:1."))
     assert r"Sherlock\, and\; the \\ Valid" in description
     ics.encode("utf-8").decode("utf-8")  # 折行沒有把中文字切壞
+    lone_cr = _build([_task(0, "A\rSUMMARY:偽造")])
+    assert "\r\nSUMMARY:偽造" not in lone_cr, "單獨的 \\r 也不能讓標題開出一行新的欄位"
 
 
 def test_today_page_offers_the_calendar_download(seeded_app_db) -> None:

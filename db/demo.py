@@ -34,6 +34,19 @@ VISITOR_TTL = _dt.timedelta(hours=12)
 #: 資料庫也不會無限長大（每個訪客約 30 個計畫項目＋2 份 JD）。
 MAX_VISITORS = 300
 
+#: 一分鐘內最多建幾個新訪客。只有總數上限的話，有人寫程式一直開新分頁，會把正在看
+#: 展示的面試官（最舊的訪客）擠掉；先擋住建立的速度，總數上限才是最後一道。
+MAX_NEW_VISITORS_PER_MINUTE = 30
+
+
+def too_many_new_visitors(session: Session, now: _dt.datetime | None = None) -> bool:
+    since = (now or clock.utc_now()) - _dt.timedelta(minutes=1)
+    recent = session.scalars(
+        select(User.id).where(User.email.like(f"%@{VISITOR_DOMAIN}"), User.created_at >= since)
+    ).all()
+    return len(recent) >= MAX_NEW_VISITORS_PER_MINUTE
+
+
 #: 範例計畫：開始於幾天前、共幾天、每天幾分鐘。
 #: 14 天 × 90 分鐘排得下全部 30 題重點題組、還有餘裕：漏掉的那一題挪到今天之後
 #: 不會超出期限。10 天 × 60 分鐘會排滿，訪客第一眼看到的是紅色的「時間不夠」。

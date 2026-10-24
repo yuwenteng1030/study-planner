@@ -48,7 +48,7 @@ def _zh(*words: str) -> tuple[str, ...]:
 
 #: 主題 → 會被算成「提到這個主題」的詞。只放明確的詞，理由見模組說明。
 TOPIC_PATTERNS: dict[str, tuple[str, ...]] = {
-    "python_basic": _en(r"python ?3?(?:\.\d+)?", r"python3"),
+    "python_basic": _en(r"python(?:3(?:\.\d+)?)?"),
     "time_complexity": _en(r"time complexity", r"big ?o", r"space complexity")
     + _zh("時間複雜度", "空間複雜度"),
     # 單數 array 後面接 of 是「一系列」（a wide array of tools），不算

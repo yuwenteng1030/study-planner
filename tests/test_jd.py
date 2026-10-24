@@ -69,6 +69,7 @@ def test_words_that_only_look_like_a_topic_do_not_count(text, topic) -> None:
         ("priority queue", "heaps"),
         ("矩陣運算", "two_d_arrays"),
         ("Python3 scripting", "python_basic"),
+        ("Python3.11", "python_basic"),
         ("linked-list and two-pointer tricks", "linked_lists"),
         ("two-pointer tricks", "arrays"),
         ("熟悉堆積", "heaps"),
@@ -88,6 +89,13 @@ def test_skills_outside_the_bank_are_listed_separately() -> None:
     a = analyze("需要 SQL、Linux、Docker，懂 C++ 更好。Plan C 也要準備。")
     assert {"SQL／資料庫", "Linux／Shell", "Docker／Kubernetes", "C／C++"} <= set(a.other_skills)
     assert a.other_skills["C／C++"].keyword == "C++", "單獨的 C 不算"
+
+
+def test_keyword_does_not_swallow_the_following_space() -> None:
+    """「Python 經驗」要標成 **Python** 經驗：吃進空白的話，結尾的 ** 前面是空白，markdown 不會加粗。"""
+    m = analyze("三年 Python 經驗").topics["python_basic"]
+    assert m.keyword == "Python"
+    assert "**Python**" in highlight_markdown(m)
 
 
 def test_proper_noun_skills_are_case_sensitive() -> None:

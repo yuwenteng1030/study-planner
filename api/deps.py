@@ -26,8 +26,8 @@ _SINGLE_USER_ID = 1
 #: 打開公開展示版的環境變數。Streamlit Community Cloud 的 secrets 最上層的鍵也會變成環境變數。
 DEMO_ENV = "STUDY_PLANNER_DEMO"
 
-#: 訪客帳號 id 存在 session_state 的哪個鍵。
-_VISITOR_KEY = "visitor_user_id"
+#: 訪客帳號的信箱存在 session_state 的哪個鍵（為什麼不存 id 見 ``get_current_user``）。
+_VISITOR_KEY = "visitor_email"
 
 
 def is_demo() -> bool:
@@ -42,7 +42,7 @@ def get_current_user() -> int:
     也不得從 query string 或 request body 讀取 user_id
     （那會讓任何人都能存取別人的資料）。
 
-    展示版的訪客 id 只放在伺服器端的 ``session_state``，不放網址：放網址的話，
+    展示版的訪客身分只放在伺服器端的 ``session_state``，不放網址：放網址的話，
     把網址貼給別人就等於把自己的帳號交出去。代價是重新整理頁面會換一個新訪客。
 
     Returns:
@@ -52,20 +52,28 @@ def get_current_user() -> int:
         return _SINGLE_USER_ID
 
     import streamlit as st
+    from sqlalchemy import select
 
     from db.session import session_scope
 
-    user_id = st.session_state.get(_VISITOR_KEY)
     with session_scope() as session:
         from core import clock
         from db import demo
         from db.models import User
 
-        # 分頁開太久，帳號可能已經被當成過期訪客清掉了：換一個新的，不要讓頁面撞外鍵
-        if user_id is None or session.get(User, user_id) is None:
+        # 用信箱（裡面有一段隨機碼）認人，**不用 user_id**：SQLite 會把刪掉的最大 id
+        # 再發給下一個新帳號，只記 id 的話，刪過帳號（或被當成過期清掉）的舊分頁
+        # 下一次點擊就會進到別的訪客的帳號裡（2026-10-24 安全審查實測重現）。
+        email = st.session_state.get(_VISITOR_KEY)
+        user = session.scalar(select(User).where(User.email == email)) if email else None
+        if user is None:
+            if demo.too_many_new_visitors(session):
+                st.error("展示版這一分鐘湧進太多新訪客，請過一分鐘再重新整理。")
+                st.stop()
             demo.purge_stale_visitors(session)
-            user_id = demo.create_visitor(session, clock.today_in(clock.DEFAULT_TZ))
-            st.session_state[_VISITOR_KEY] = user_id
+            user = session.get(User, demo.create_visitor(session, clock.today_in(clock.DEFAULT_TZ)))
+            st.session_state[_VISITOR_KEY] = user.email
+        user_id = user.id
     return user_id
 
 

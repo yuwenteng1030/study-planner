@@ -171,3 +171,14 @@ def test_demo_does_not_silently_recreate_missing_accounts(db_session, monkeypatc
     monkeypatch.setenv("STUDY_PLANNER_DEMO", "1")
     with pytest.raises(LookupError):
         repo.ensure_user(db_session, 999)
+
+
+def test_new_visitors_are_rate_limited(db_session, monkeypatch) -> None:
+    monkeypatch.setattr(demo, "MAX_NEW_VISITORS_PER_MINUTE", 2)
+    now = _dt.datetime(2026, 10, 24, 12, 0)
+    for _ in range(2):
+        user = db_session.get(User, demo.create_visitor(db_session, TODAY))
+        user.created_at = now - _dt.timedelta(seconds=10)
+    db_session.flush()
+    assert demo.too_many_new_visitors(db_session, now)
+    assert not demo.too_many_new_visitors(db_session, now + _dt.timedelta(minutes=2))

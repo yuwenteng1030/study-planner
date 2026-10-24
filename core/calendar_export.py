@@ -5,7 +5,8 @@
 自己的行事曆負責——手機會跳通知，而且使用者隨時可以自己刪掉，不需要「取消訂閱」。
 
 代價：計畫重排之後，行事曆裡的日子不會跟著變，要重新下載一次。每個事件的 UID 固定是
-「計畫＋日期」，重新匯入時多數行事曆會更新同一天的事件，而不是多出一份。
+「計畫＋日期」、SEQUENCE 是下載的時間，重新匯入時行事曆會更新同一天的事件，而不是多出一份。
+重排後整天被清空的日子，舊事件不會被取消，要自己刪。
 
 這個模組是純函式，不碰資料庫，照 RFC 5545 輸出（CRLF 換行、75 位元組折行、跳脫逗號分號）。
 """
@@ -35,7 +36,7 @@ class DayTask:
 def _escape(text: str) -> str:
     """RFC 5545 §3.3.11：反斜線、逗號、分號要跳脫，換行寫成 ``\\n``。"""
     return (
-        text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\n").replace("\n", "\\n")
+        text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
     )
 
 
@@ -99,6 +100,9 @@ def build_ics(
             "BEGIN:VEVENT",
             f"UID:plan{plan_id}-{day:%Y%m%d}@study-planner",
             f"DTSTAMP:{stamp}",
+            # 重新匯入時，行事曆靠較大的 SEQUENCE 判斷「這是同一個事件的新版」；沒有它，
+            # Google 日曆常會略過 UID 已經存在的事件，題目清單就停在舊的
+            f"SEQUENCE:{int(now_utc.replace(tzinfo=_dt.timezone.utc).timestamp())}",
             f"DTSTART:{_utc(day, start_at, tz)}",
             f"DTEND:{_utc(end.date(), end.time(), tz)}",
             f"SUMMARY:{_escape(f'📚 今天 {len(items)} 題（{minutes} 分鐘）')}",
