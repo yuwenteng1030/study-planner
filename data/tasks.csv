@@ -1,7 +1,7 @@
 source,title,url,topic,prereq,difficulty,est_minutes,static_note,focus
 HR,Find the Runner-Up Score!,https://www.hackerrank.com/challenges/find-second-maximum-number-in-a-list/problem,python_basic,,Easy,10,list 與 set 的基本操作，注意重複值,
 HR,collections.Counter(),https://www.hackerrank.com/challenges/collections-counter/problem,python_basic,,Easy,15,Counter 的建立與遞減，之後雜湊題都靠它,1
-HR,DefaultDict Tutorial,https://www.hackerrank.com/challenges/defaultdict-tutorial/problem,python_basic,,Easy,15,defaultdict 省掉「key 不存在」的判斷,1
+HR,DefaultDict Tutorial,https://www.hackerrank.com/challenges/defaultdict-tutorial/problem,python_basic,,Easy,15,defaultdict 省掉「key 不存在」的判斷,
 HR,List Comprehensions,https://www.hackerrank.com/challenges/list-comprehensions/problem,python_basic,,Easy,10,推導式取代三層巢狀迴圈，上機考的基本手速,
 HR,Nested Lists,https://www.hackerrank.com/challenges/nested-list/problem,python_basic,,Easy,15,多鍵排序與「第二小」的邊界，注意重複分數,
 HR,Finding the Percentage,https://www.hackerrank.com/challenges/finding-the-percentage/problem,python_basic,,Easy,15,dict 查找與格式化輸出，輸入解析要穩,
@@ -53,14 +53,14 @@ HR,Priyanka and Toys,https://www.hackerrank.com/challenges/priyanka-and-toys/pro
 HR,Permuting Two Arrays,https://www.hackerrank.com/challenges/two-arrays/problem,greedy,sorting,Easy,20,一個升冪一個降冪配對，要能說明為何最佳,
 HR,Jim and the Orders,https://www.hackerrank.com/challenges/jim-and-the-orders/problem,greedy,sorting,Easy,20,按完成時間排序後輸出原始編號,
 HR,Max Min,https://www.hackerrank.com/challenges/angry-children/problem,greedy,sorting,Medium,30,排序後取連續 k 個，窗口最小差,2
-HR,Greedy Florist,https://www.hackerrank.com/challenges/greedy-florist/problem,greedy,sorting,Medium,35,由貴到便宜分配，貪婪順序決定答案,
+HR,Greedy Florist,https://www.hackerrank.com/challenges/greedy-florist/problem,greedy,sorting,Medium,35,由貴到便宜分配，貪婪順序決定答案,2
 HR,Cutting Boards,https://www.hackerrank.com/challenges/board-cutting/problem,greedy,sorting,Hard,55,由貴到便宜切，切痕數量隨已切次數成長,
 HR,Chief Hopper,https://www.hackerrank.com/challenges/chief-hopper/problem,greedy,,Hard,50,從最後一棟往回推最低所需能量，倒著想比正著試簡單,
 HR,Maximum Element,https://www.hackerrank.com/challenges/maximum-element/problem,stacks_queues,,Easy,20,輔助堆疊同步記錄當前最大值,
 HR,Equal Stacks,https://www.hackerrank.com/challenges/equal-stacks/problem,stacks_queues,arrays,Easy,25,先算前綴高度，再同步往下退,
 HR,Balanced Brackets,https://www.hackerrank.com/challenges/balanced-brackets/problem,stacks_queues,,Medium,25,多種括號配對，型別也要相符,2
 HR,Queues: A Tale of Two Stacks,https://www.hackerrank.com/challenges/ctci-queue-using-two-stacks/problem,stacks_queues,,Medium,30,兩個堆疊模擬佇列，攤還複雜度,
-HR,Simple Text Editor,https://www.hackerrank.com/challenges/simple-text-editor/problem,stacks_queues,,Medium,40,用堆疊存操作紀錄來實作 undo,2
+HR,Simple Text Editor,https://www.hackerrank.com/challenges/simple-text-editor/problem,stacks_queues,,Medium,40,用堆疊存操作紀錄來實作 undo,
 HR,Castle on the Grid,https://www.hackerrank.com/challenges/castle-on-the-grid/problem,stacks_queues,,Medium,45,BFS 用佇列，一次滑到底才算一步,
 HR,Largest Rectangle,https://www.hackerrank.com/challenges/largest-rectangle/problem,stacks_queues,,Medium,50,單調堆疊進階，邊界哨兵的處理,3
 HR,Min Max Riddle,https://www.hackerrank.com/challenges/min-max-riddle/problem,stacks_queues,,Medium,55,每個元素當最小值的最大區間長度,
@@ -68,7 +68,7 @@ HR,Truck Tour,https://www.hackerrank.com/challenges/truck-tour/problem,stacks_qu
 HR,Poisonous Plants,https://www.hackerrank.com/challenges/poisonous-plants/problem,stacks_queues,,Hard,60,堆疊內記錄存活天數，單調性是關鍵,
 HR,Print the Elements of a Linked List,https://www.hackerrank.com/challenges/print-the-elements-of-a-linked-list/problem,linked_lists,,Easy,10,先把走訪寫熟，後面每一題都靠它,
 HR,Insert a node at a specific position in a linked list,https://www.hackerrank.com/challenges/insert-a-node-at-a-specific-position-in-a-linked-list/problem,linked_lists,,Easy,15,加 dummy head，頭節點就不用特判,
-HR,Reverse a linked list,https://www.hackerrank.com/challenges/reverse-a-linked-list/problem,linked_lists,,Easy,15,prev／cur／next 三個指針，畫圖再寫,
+HR,Reverse a linked list,https://www.hackerrank.com/challenges/reverse-a-linked-list/problem,linked_lists,,Easy,15,prev／cur／next 三個指針，畫圖再寫,1
 HR,Inserting a Node Into a Sorted Doubly Linked List,https://www.hackerrank.com/challenges/insert-a-node-into-a-sorted-doubly-linked-list/problem,linked_lists,,Easy,20,雙向串列要同時接好 prev 與 next,
 HR,Find Merge Point of Two Lists,https://www.hackerrank.com/challenges/find-the-merge-point-of-two-joined-linked-lists/problem,linked_lists,,Easy,20,長度差先補齊，再同步往前走,
 HR,Cycle Detection,https://www.hackerrank.com/challenges/detect-whether-a-linked-list-contains-a-cycle/problem,linked_lists,,Medium,25,快慢指針，相遇即有環,
@@ -84,14 +84,14 @@ HR,Tree: Height of a Binary Tree,https://www.hackerrank.com/challenges/tree-heig
 HR,Tree: Level Order Traversal,https://www.hackerrank.com/challenges/tree-level-order-traversal/problem,trees,,Easy,20,層序用佇列，要分層就先記當層長度,
 HR,Tree: Top View,https://www.hackerrank.com/challenges/tree-top-view/problem,trees,,Easy,25,記每個水平位置第一次出現的節點,
 HR,Binary Search Tree: Lowest Common Ancestor,https://www.hackerrank.com/challenges/binary-search-tree-lowest-common-ancestor/problem,trees,,Easy,25,利用 BST 的大小關係往一邊走,
-HR,Is This a Binary Search Tree?,https://www.hackerrank.com/challenges/is-binary-search-tree/problem,trees,,Medium,35,傳上下界下去，不能只比父子兩層,
+HR,Is This a Binary Search Tree?,https://www.hackerrank.com/challenges/is-binary-search-tree/problem,trees,,Medium,35,傳上下界下去，不能只比父子兩層,3
 HR,Swap Nodes [Algo],https://www.hackerrank.com/challenges/swap-nodes-algo/problem,trees,,Medium,35,按深度交換左右子樹，遞迴帶層數,
 HR,Balanced Forest,https://www.hackerrank.com/challenges/balanced-forest/problem,trees,,Hard,70,子樹和＋雜湊表，情況分類要列完,
 HR,QHEAP1,https://www.hackerrank.com/challenges/qheap1/problem,heaps,,Easy,25,heapq 配一個已刪集合做延遲刪除,
 HR,Jesse and Cookies,https://www.hackerrank.com/challenges/jesse-and-cookies/problem,heaps,,Easy,25,一直取最小值才用堆，排一次用 sorted 就好,
 HR,Find the Running Median,https://www.hackerrank.com/challenges/find-the-running-median/problem,heaps,,Hard,50,最大堆配最小堆，兩邊維持平衡,
 HR,Roads and Libraries,https://www.hackerrank.com/challenges/torque-and-development/problem,graphs,,Medium,40,算連通塊數量，再比兩種成本,3
-HR,Journey to the Moon,https://www.hackerrank.com/challenges/journey-to-the-moon/problem,graphs,,Medium,45,連通塊大小的兩兩配對計數,3
+HR,Journey to the Moon,https://www.hackerrank.com/challenges/journey-to-the-moon/problem,graphs,,Medium,45,連通塊大小的兩兩配對計數,
 HR,Find the nearest clone,https://www.hackerrank.com/challenges/find-the-nearest-clone/problem,graphs,,Medium,40,多起點 BFS，同色節點一起下水,
 HR,Even Tree,https://www.hackerrank.com/challenges/even-tree/problem,graphs,,Medium,35,子樹大小為偶數就可以切一刀,
 HR,BFS: Shortest Reach in a Graph,https://www.hackerrank.com/challenges/ctci-bfs-shortest-reach/problem,graphs,,Hard,35,無權圖最短路是 BFS，不是 Dijkstra,3

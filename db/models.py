@@ -424,9 +424,18 @@ class JobDescription(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=False, index=True
     )
+    #: ``jd``（職缺描述）或 ``post``（社群面經：PTT、Dcard、Threads 上的考試心得）。
+    #: 只有 ``jd`` 進評分公式的 ``jd_factor``，理由見 README 設計決策 16。
+    kind: Mapped[str] = mapped_column(String(10), nullable=False, default="jd", server_default="jd")
+
     #: 使用者自己取的名字（例如「後端工程師 A」），列表與出處裡顯示用。
     title: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    #: 原文網址（選填）。只收 http(s)，見 ``repositories.save_jd``。
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[_dt.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
+
+    __table_args__ = (CheckConstraint("kind IN ('jd', 'post')", name="ck_jds_kind"),)

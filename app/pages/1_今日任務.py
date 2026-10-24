@@ -141,12 +141,13 @@ def _render_page() -> None:
         st.subheader(f"{today:%m/%d}（{summary['today_minutes']} 分鐘）")
         adventure = repo.load_adventure(session, user_id)
         citations = repo.load_jd_citations(session, user_id)
+        post_citations = repo.load_jd_citations(session, user_id, kind=repo.KIND_POST)
         seen_topics: set[str] = set()
         for item in today_items:
             topic_id = item.task.topic_id
             _render_item(
                 session, item, show_key_points=topic_id not in seen_topics, adventure=adventure,
-                citations=citations.get(topic_id, []),
+                citations=citations.get(topic_id, []), post_citations=post_citations.get(topic_id, []),
             )
             seen_topics.add(topic_id)
 
@@ -229,7 +230,9 @@ def _cancel_timer() -> None:
         repo.cancel_adventure(session, get_current_user())
 
 
-def _render_item(session, item, show_key_points: bool = True, adventure=None, citations=()) -> None:
+def _render_item(
+    session, item, show_key_points: bool = True, adventure=None, citations=(), post_citations=()
+) -> None:
     """一張任務卡。打勾即寫入 ``progress_events``。
 
     這裡刻意**不呼叫** ``st.rerun()``。
@@ -310,6 +313,10 @@ def _render_item(session, item, show_key_points: bool = True, adventure=None, ci
             title, mention = citations[0]
             more = f"（共 {len(citations)} 份 JD 提到）" if len(citations) > 1 else ""
             st.caption(f"📄 JD 出處{more}：「{highlight_markdown(mention)}」— {md_escape(title)}")
+        if post_citations and show_key_points:
+            title, mention = post_citations[0]
+            more = f"（共 {len(post_citations)} 篇提到）" if len(post_citations) > 1 else ""
+            st.caption(f"💬 面經提到{more}：「{highlight_markdown(mention)}」— {md_escape(title)}")
 
         # 實際分鐘數一律顯示，不是打勾之後才出現：
         # 要讓使用者先填再打勾，否則打勾的那一瞬間還沒有值可以記。

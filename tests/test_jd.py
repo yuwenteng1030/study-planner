@@ -182,7 +182,8 @@ def test_export_includes_jds_and_clearing_records_keeps_them(db_session) -> None
     _user(db_session)
     repo.save_jd(db_session, 1, "後端 A", "需要 Python")
     export = repo.export_user_data(db_session, 1)
-    assert export["format_version"] == 4
+    assert export["format_version"] == 5
+    assert export["jds"][0]["kind"] == "jd" and export["jds"][0]["source_url"] is None
     assert export["jds"][0]["title"] == "後端 A" and export["jds"][0]["body"] == "需要 Python"
 
     counts = repo.delete_user_data(db_session, 1)
@@ -214,6 +215,53 @@ def test_jds_change_what_gets_planned(db_session) -> None:
     assert after.index("heaps") < before.index("heaps")
 
 
+def test_community_posts_are_listed_but_do_not_change_the_ranking(db_session) -> None:
+    _user(db_session)
+    repo.save_jd(db_session, 1, "後端 A", "需要 Python")
+    repo.save_jd(
+        db_session, 1, "Dcard 心得", "第二題考 Tree，第三題 two pointer + binary search",
+        kind=repo.KIND_POST, source_url="https://www.dcard.tw/f/tech_job/p/1",
+    )
+    stats = repo.load_jd_stats(db_session, 1)
+    assert stats.total == 1 and "trees" not in stats.hits, "面經不進 jd_factor"
+    posts = repo.load_jd_citations(db_session, 1, kind=repo.KIND_POST)
+    assert {"trees", "arrays", "search"} <= set(posts)
+    assert "trees" not in repo.load_jd_citations(db_session, 1)
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["javascript:alert(1)", "https://evil.example/a)b", "ftp://x.example", "not a url", "https://x.example/" + "a" * 600],
+)
+def test_bad_source_urls_are_rejected(db_session, url) -> None:
+    _user(db_session)
+    with pytest.raises(ValueError):
+        repo.save_jd(db_session, 1, "x", "Python", kind=repo.KIND_POST, source_url=url)
+
+
+def test_unknown_kind_is_rejected(db_session) -> None:
+    _user(db_session)
+    with pytest.raises(ValueError):
+        repo.save_jd(db_session, 1, "x", "Python", kind="rumor")
+
+
+@pytest.mark.parametrize(
+    "text, topic",
+    [
+        ("(M) 包裝成DP的背包題", "dp_1d"),
+        ("(E) String: 送分題", "strings"),
+        ("(M) two pointer + binary search", "search"),
+        ("雙指標", "arrays"),
+    ],
+)
+def test_wording_used_in_exam_posts_is_recognized(text, topic) -> None:
+    assert topic in analyze(text).topics
+
+
+def test_lowercase_string_in_a_jd_is_not_string_manipulation() -> None:
+    assert "strings" not in analyze("Store the connection string in a vault").topics
+
+
 # --- 頁面 ---------------------------------------------------------------
 
 
@@ -237,7 +285,8 @@ def test_jd_page_saves_and_shows_citations(seeded_app_db) -> None:
     assert any("**binary search**" in m.value for m in app.markdown)
 
     # 刪掉它，頁面回到原本的樣子
-    delete_buttons = [b for b in app.button if b.label == "刪掉這份 JD"]
+    delete_buttons = [b for b in app.button if b.label == "刪掉這份"]
+    assert delete_buttons
     for button in delete_buttons:
         button.click().run()
         app.run()
@@ -251,6 +300,22 @@ def test_failed_save_keeps_what_was_pasted(seeded_app_db) -> None:
     app.button[0].click().run()
     assert app.error, "內容空白要擋下"
     assert app.text_input[0].value == "空的", "存檔失敗不能把使用者填的東西清掉"
+
+
+def test_saving_a_post_from_the_page(seeded_app_db) -> None:
+    app = AppTest.from_file(JD_PAGE, default_timeout=60).run()
+    app.radio[0].set_value(repo.KIND_POST)
+    app.text_input[0].set_value("UI 面經")
+    app.text_input[1].set_value("https://www.ptt.cc/bbs/Soft_Job/M.1.html")
+    app.text_area[0].set_value("考了 Linked list 跟 Tree")
+    app.button[0].click().run()
+    assert not app.exception, [str(e.value) for e in app.exception]
+    assert "不影響排序" in app.success[0].value
+    assert any("篇面經說考了什麼" in h.value for h in app.subheader)
+    for button in [b for b in app.button if b.label == "刪掉這份"]:
+        button.click().run()
+        app.run()
+    assert not app.exception
 
 
 def test_jd_page_renders_for_demo_visitors_with_sample_jds(monkeypatch, seeded_app_db) -> None:

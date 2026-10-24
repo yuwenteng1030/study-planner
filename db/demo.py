@@ -88,6 +88,17 @@ Nice to have
 )
 
 
+#: 範例面經：同樣是虛構的，整理成社群考試心得常見的寫法（題號、難度、題型一行一題）。
+SAMPLE_POST: tuple[str, str] = (
+    "範例：線上程式測驗心得（虛構）",
+    """HackerRank 3 題 90 分鐘，難度大概 E / M / M。
+1. (E) String：字串處理，送分題，但題目敘述很長要耐心看完。
+2. (M) 看起來像 DP 的背包題，其實排序後用 greedy 就能解。
+3. (M) two pointer + binary search，大測資要注意時間複雜度。
+建議：先熟悉 HackerRank 的輸入輸出，有些題要自己讀 stdin。""",
+)
+
+
 def is_visitor(user: User) -> bool:
     return user.email.endswith("@" + VISITOR_DOMAIN)
 
@@ -100,6 +111,7 @@ def create_visitor(session: Session, today: _dt.date) -> int:
     session.flush()
     for title, body in SAMPLE_JDS:
         repo.save_jd(session, user.id, title, body)
+    repo.save_jd(session, user.id, SAMPLE_POST[0], SAMPLE_POST[1], kind=repo.KIND_POST)
     seed_sample_progress(session, user.id, today)
     return user.id
 

@@ -57,7 +57,7 @@ def test_two_visitors_do_not_share_data(db_session) -> None:
     assert not {j.id for j in repo.load_jds(db_session, a)} & {j.id for j in repo.load_jds(db_session, b)}
     repo.delete_user_data(db_session, a, drop_account=True)
     assert repo.load_active_plan(db_session, b) is not None
-    assert len(repo.load_jds(db_session, b)) == len(demo.SAMPLE_JDS)
+    assert len(repo.load_jds(db_session, b)) == len(demo.SAMPLE_JDS) + 1  # 加一篇範例面經
 
 
 def test_purge_removes_only_stale_visitors(db_session) -> None:

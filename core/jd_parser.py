@@ -52,12 +52,14 @@ TOPIC_PATTERNS: dict[str, tuple[str, ...]] = {
     "time_complexity": _en(r"time complexity", r"big ?o", r"space complexity")
     + _zh("時間複雜度", "空間複雜度"),
     # 單數 array 後面接 of 是「一系列」（a wide array of tools），不算
-    "arrays": _en(r"arrays", r"array(?! of)", r"sliding window", r"two pointers?", r"prefix sums?") + _zh("陣列"),
+    "arrays": _en(r"arrays", r"array(?! of)", r"sliding window", r"two pointers?", r"prefix sums?")
+    + _zh("陣列", "雙指標", "滑動視窗", "前綴和"),
     "strings": _en(r"string manipulation", r"string processing", r"text processing", r"regex", r"regular expressions?")
+    + _en(r"String", r"strings", case=True)  # 面經常寫「(E) String」；分大小寫，避開 connection string 這類用法
     + _zh("字串處理", "字串", "文字處理", "正規表示式", "正則表達式"),
     "hashmaps": _en(r"hash ?maps?", r"hash tables?", r"hashing", r"dictionar(?:y|ies)") + _zh("雜湊", "哈希"),
     "sorting": _en(r"sorting", r"sort algorithms?") + _zh("排序"),
-    "search": _en(r"binary search", r"search algorithms?") + _zh("二分搜尋", "二元搜尋", "搜尋演算法"),
+    "search": _en(r"binary search", r"search algorithms?") + _zh("二分搜尋", "二元搜尋", "二分法", "搜尋演算法"),
     "greedy": _en(r"greedy") + _zh("貪婪", "貪心"),
     # 技術棧（tech stack、ELK stack、full-stack）與訊息系統（message queue、Kafka queue system）
     # 都不是資料結構
@@ -76,8 +78,9 @@ TOPIC_PATTERNS: dict[str, tuple[str, ...]] = {
     + _zh("二元樹", "二叉樹", "樹狀結構"),
     "heaps": _en(r"heaps?", r"priority queues?") + _zh("優先佇列", "堆積"),
     "graphs": _en(r"graphs?", r"graph theory", r"BFS", r"DFS", r"shortest paths?") + _zh("圖論", "最短路徑"),
-    "dp_1d": _en(r"dynamic programming") + _zh("動態規劃"),
-    "dp_2d": _en(r"dynamic programming") + _zh("動態規劃"),
+    # 面經裡常只寫 DP（分大小寫：小寫 dp 太常是別的縮寫）或「背包題」
+    "dp_1d": _en(r"dynamic programming", r"knapsack") + _en(r"DP", case=True) + _zh("動態規劃", "背包"),
+    "dp_2d": _en(r"dynamic programming", r"knapsack") + _en(r"DP", case=True) + _zh("動態規劃", "背包"),
     "two_d_arrays": _en(r"matri(?:x|ces)", r"2d arrays?", r"grids?") + _zh("矩陣", "二維陣列"),
     "bit_manipulation": _en(r"bit manipulation", r"bitwise", r"bit operations?") + _zh("位元運算"),
     "math_number_theory": _en(r"number theory", r"prime numbers?", r"combinatorics") + _zh("數論", "質數", "排列組合"),

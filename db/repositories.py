@@ -789,23 +789,51 @@ def load_calibration_samples(session: Session, user_id: int) -> list[Sample]:
 MAX_JDS_PER_USER = 30
 
 
-def save_jd(session: Session, user_id: int, title: str, body: str) -> JobDescription:
-    """存一份 JD。標題與內容去掉頭尾空白；內容超過 ``MAX_JD_CHARS`` 字的部分截掉。
+#: ``jds.kind`` 的兩種值。
+KIND_JD = "jd"
+KIND_POST = "post"
+
+
+def _clean_source_url(url: str | None) -> str | None:
+    """原文網址只收乾淨的 http(s) 絕對網址：它會被放進 markdown 連結，``javascript:`` 或
+    含 ``)`` 的網址會變成可以點的惡意連結或截斷語法（同 ``scripts/import_data._check_task_urls``）。"""
+    from urllib.parse import urlparse
+
+    url = (url or "").strip()
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or any(c in url for c in "()<>\"\\ []"):
+        raise ValueError("網址要是 http:// 或 https:// 開頭的完整網址")
+    if len(url) > 500:
+        raise ValueError("網址最多 500 個字")
+    return url
+
+
+def save_jd(
+    session: Session, user_id: int, title: str, body: str, *, kind: str = KIND_JD, source_url: str | None = None
+) -> JobDescription:
+    """存一份 JD 或社群面經。標題與內容去掉頭尾空白；內容超過 ``MAX_JD_CHARS`` 字的部分截掉。
 
     Raises:
-        ValueError: 內容是空的、標題太長，或已經存滿 ``MAX_JDS_PER_USER`` 份。
+        ValueError: 內容是空的、標題太長、網址不合法、種類不對，或已經存滿 ``MAX_JDS_PER_USER`` 份。
     """
-    title = title.strip() or "未命名職缺"
+    if kind not in (KIND_JD, KIND_POST):
+        raise ValueError(f"不認得的種類：{kind!r}")
+    title = title.strip() or ("未命名職缺" if kind == KIND_JD else "未命名面經")
     body = body.strip()
     if not body:
-        raise ValueError("JD 內容是空的")
+        raise ValueError("內容是空的")
     if len(title) > 120:
         raise ValueError("標題最多 120 個字")
+    source_url = _clean_source_url(source_url)
     count = len(session.scalars(select(JobDescription.id).where(JobDescription.user_id == user_id)).all())
     if count >= MAX_JDS_PER_USER:
-        raise ValueError(f"最多存 {MAX_JDS_PER_USER} 份 JD，先刪掉幾份舊的")
+        raise ValueError(f"JD 與面經合計最多存 {MAX_JDS_PER_USER} 份，先刪掉幾份舊的")
     ensure_user(session, user_id)
-    jd = JobDescription(user_id=user_id, title=title, body=body[:MAX_JD_CHARS])
+    jd = JobDescription(
+        user_id=user_id, kind=kind, title=title, body=body[:MAX_JD_CHARS], source_url=source_url
+    )
     session.add(jd)
     session.flush()
     return jd
@@ -836,14 +864,19 @@ def load_jd_analyses(session: Session, user_id: int) -> list[tuple[JobDescriptio
 
 
 def load_jd_stats(session: Session, user_id: int) -> JDStats:
-    """評分公式要的 JD 統計。一份都沒有時是空的，``jd_factor`` 全部是 1。"""
-    return jd_stats(a for _jd, a in load_jd_analyses(session, user_id))
+    """評分公式要的 JD 統計，**只算職缺描述**，社群面經不算（README 設計決策 16）。
+    一份都沒有時是空的，``jd_factor`` 全部是 1。"""
+    return jd_stats(a for jd, a in load_jd_analyses(session, user_id) if jd.kind == KIND_JD)
 
 
-def load_jd_citations(session: Session, user_id: int) -> dict[str, list[tuple[str, Mention]]]:
-    """主題 → [(JD 標題, 引用)]，任務卡與首頁顯示「出處」用。"""
+def load_jd_citations(
+    session: Session, user_id: int, kind: str = KIND_JD
+) -> dict[str, list[tuple[str, Mention]]]:
+    """主題 → [(標題, 引用)]，任務卡與首頁顯示「出處」用。``kind`` 選 JD 或社群面經。"""
     out: dict[str, list[tuple[str, Mention]]] = {}
     for jd, analysis in load_jd_analyses(session, user_id):
+        if jd.kind != kind:
+            continue
         for topic_id, mention in analysis.topics.items():
             out.setdefault(topic_id, []).append((jd.title, mention))
     return out
@@ -861,7 +894,8 @@ def load_jd_citations(session: Session, user_id: int) -> dict[str, list[tuple[st
 #: 2：加上 ``task_completions``（從地圖做完、不在計畫裡的題目）。
 #: 3：時間戳一律是 UTC 並標上 ``+00:00``；``user.tz`` 是使用者的時區（2026-10-23）。
 #: 4：加上 ``jds``（使用者貼上的職缺描述原文）（2026-10-24）。
-EXPORT_FORMAT_VERSION = 4
+#: 5：``jds`` 每份加上 ``kind``（jd／post）與 ``source_url``（2026-10-24，社群面經）。
+EXPORT_FORMAT_VERSION = 5
 
 #: 帳號被刪掉後重建時用的預設值。與 ``scripts/import_data.py`` 的 SEED_USER 一致。
 _FALLBACK_EMAIL = "owner@localhost"
@@ -1012,7 +1046,10 @@ def export_user_data(session: Session, user_id: int) -> dict:
             for row in extra
         ],
         "jds": [
-            {"id": jd.id, "title": jd.title, "body": jd.body, "created_at": _iso(jd.created_at)}
+            {
+                "id": jd.id, "kind": jd.kind, "title": jd.title, "source_url": jd.source_url,
+                "body": jd.body, "created_at": _iso(jd.created_at),
+            }
             for jd in jds
         ],
     }

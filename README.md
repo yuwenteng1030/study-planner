@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、每日提醒（行事曆檔）、公開展示版皆可運作，384 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、每日提醒（行事曆檔）、公開展示版皆可運作，397 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -24,12 +24,14 @@
 
 | 段 | 題數 | 內容 |
 |---|---|---|
-| 暖身 | 6 | Counter／defaultdict、旋轉與重複字串、字串交集、雜湊查表——把語法與輸入輸出練到不卡手 |
-| Medium 主力 | 14 | 陣列（New Year Chaos、Sparse Arrays）、字串與雜湊（Sherlock 系列、Count Triplets、Frequency Queries）、排序與二分（Minimum Swaps 2、Fraudulent Activity、Pairs、Minimum Time Required）、Greedy、Stack |
-| 進階 | 10 | 圖（Roads and Libraries、Journey to the Moon、BFS）、DP（Max Array Sum、Coin Change、Candies、Common Child）、單調堆疊，加上 3 題 Hard（拿部分分數用） |
+| 暖身 | 6 | Counter、旋轉與重複字串、字串交集、雜湊查表、反轉鏈結串列——把語法與輸入輸出練到不卡手 |
+| Medium 主力 | 14 | 陣列（New Year Chaos、Sparse Arrays）、字串與雜湊（Sherlock 系列、Count Triplets、Frequency Queries）、排序與二分（Minimum Swaps 2、Fraudulent Activity、Pairs、Minimum Time Required）、Greedy（Max Min、Greedy Florist）、Stack |
+| 進階 | 10 | 圖（Roads and Libraries、BFS）、樹（Is This a Binary Search Tree?）、DP（Max Array Sum、Coin Change、Candies、Common Child）、單調堆疊，加上 3 題 Hard（拿部分分數用） |
 
-合計 Medium 21 題、Hard 3 題、約 1035 分鐘。首頁預設「只排重點題組」，學習地圖預設顯示「重點路線」（上方可切到「整個題庫」）；做完再關掉首頁的開關，排其餘的題目。
+合計 Medium 21 題、Hard 3 題、約 1020 分鐘。首頁預設「只排重點題組」，學習地圖預設顯示「重點路線」（上方可切到「整個題庫」）；做完再關掉首頁的開關，排其餘的題目。
 挑選是 `data/tasks.csv` 的 `focus` 欄（1／2／3），不動評分公式：重點題組只是縮小排程的輸入。
+
+**2026-10-24 依社群考試心得調整 3 題**（總數、Medium 數不變）：近兩年的公開心得提到第二題考過 Tree 與 Linked list、「看起來像 DP 的背包題其實用 greedy 解」，而原本的 30 題沒有樹、沒有鏈結串列、greedy 只有 1 題。換掉的是重複度較高的 DefaultDict Tutorial（Counter 已涵蓋）、Simple Text Editor（Balanced Brackets 已涵蓋堆疊）、Journey to the Moon（Roads and Libraries 已涵蓋連通塊）；換進 Reverse a linked list、Greedy Florist、Is This a Binary Search Tree?。心得是個人經驗、每一梯不同，所以只拿來微調、不推翻原本以陣列與字串為主的配比。
 
 ## 評分公式
 
@@ -192,6 +194,17 @@ Claude API 只負責把已知的重點改寫成一句話。沒有 API key、額�
 
 **代價**：重排後行事曆不會自己更新，要重新下載匯入一次。每個事件的 UID 固定是「計畫＋日期」、SEQUENCE 是下載時間，重新匯入時會更新同一天的事件，不會多出一份；重排後整天被清空的日子，舊事件要自己刪。
 
+### 16. 社群面經只列出來參考，不進排序；也不自動去抓
+
+「職缺與面經」頁除了 JD，也可以貼 PTT、Dcard、Threads 上的考試心得（`jds.kind = 'post'`，可附原文網址）。面經用同一套關鍵字比對、一樣附原文引用，今日任務卡會多一行「💬 面經提到」。
+
+- **不進 `jd_factor`**：`jd_factor` 的定義是「多少比例的**職缺**要這個」。面經是個人經驗、每一梯不同，而且一個人可能連貼好幾篇，混進去會讓少數人的運氣改變排序。面經的用途是讓人調整**重點題組**（例如上面那次換題），那是有人看過、判斷過的決定。
+- **不自動抓社群網站**：Dcard 會擋機器人、IG 與 Threads 要登入，爬取也違反多數社群的使用條款。使用者自己讀過、覺得可信的那幾篇，比爬來一大堆更有參考價值。
+- **原文網址只收 http(s)**，而且擋掉會截斷 markdown 連結的字元：網址會做成可以點的連結，`javascript:` 不能進來（`test_bad_source_urls_are_rejected`）。
+- 面經的寫法跟 JD 不一樣，所以多認了幾個詞：`DP`、`背包`、`雙指標`、`二分法`，以及大寫開頭的 `String`（「(E) String」；小寫的 connection string 不算）。
+
+**代價**：面經裡的資訊要靠人判斷才會進到計畫裡，網站不會自動「學」到最新的考法。
+
 ## 排程規則
 
 1. **前置先排**：某主題的題目不得排在它的前置主題的題目之前。
@@ -232,7 +245,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 384 個測試
+pytest -q                          # 397 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
@@ -295,7 +308,7 @@ STUDY_PLANNER_DEMO=1 DATABASE_URL=sqlite:///demo.db streamlit run app/Home.py
 | `tests/test_quota_db.py` | 額度存資料庫：重開不歸零、退回沒用到的次數、不同用途分開算 |
 | `tests/test_game_map.py`（續） | 重點路線依階段分區、經驗值（Easy 10／Medium 25／Hard 50）、重點題組 30 題且 Medium 過半 |
 | `tests/test_adventure.py` | 冒險計時：分鐘無條件進位且有上限、同一題重按不重新計時、換題重新計時、打勾自動記分鐘（自己填的優先）、地圖計畫外完成也記分鐘並算進估時校正、刪帳號一併刪除 |
-| `tests/test_jd.py` | JD 出處：引用一定是原文並指到關鍵字、長得像的詞不算（tech stack、Main Street）、泛稱不加分、題庫外技能另列、一份只算一次、markdown 不能注入、只刪得到自己的、清紀錄保留 JD、貼了 JD 的主題真的排得比較前面、頁面存檔與展示版範例 JD |
+| `tests/test_jd.py` | JD 與面經：面經不進排序、原文網址只收 http(s)、面經的寫法（DP、背包、雙指標）認得出來、引用一定是原文並指到關鍵字、長得像的詞不算（tech stack、Main Street）、泛稱不加分、題庫外技能另列、一份只算一次、markdown 不能注入、只刪得到自己的、清紀錄保留 JD、貼了 JD 的主題真的排得比較前面、頁面存檔與展示版範例 JD |
 | `tests/test_calendar_export.py` | 每日提醒：一天一個事件、昨天的不匯出、台北時間換成 UTC、長度是當天總分鐘數、逗號分號跳脫、75 位元組折行不切壞中文、今日任務頁有下載 |
 | `tests/test_demo.py` | 公開展示版：每個分頁一個訪客、範例計畫只留昨天一題沒做而且重排不會超時、過期只清訪客、展示版不呼叫 Claude、空資料庫自動匯入題庫、五個頁面對新訪客都畫得出來 |
 | `tests/test_ui_smoke.py` | 真的送出表單、真的打勾、真的刪資料，確認頁面不會炸 |
