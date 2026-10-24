@@ -30,9 +30,58 @@ def test_bear_goes_to_todays_first_unfinished_task() -> None:
     assert bear_stage(stages, PlanMarks(today=(3, 4))).task_id == 3
 
 
-def test_bear_follows_todays_order_not_the_route_order() -> None:
-    stages = [_st(1), _st(2), _st(3)]
-    assert bear_stage(stages, PlanMarks(today=(3, 2))).task_id == 3
+def test_bear_follows_the_route_order_among_todays_tasks() -> None:
+    """今天排了 3、2：小熊先站 2（地圖上編號小的），不跳過 2 先去 3。
+
+    2026-10-24 以前照今天的排程順序走，使用者回報「做完第 1 關跳到第 3 關、做完才回第 2 關」。
+    """
+    stages = [_st(1, done=True), _st(2), _st(3)]
+    assert bear_stage(stages, PlanMarks(today=(3, 2))).task_id == 2
+
+
+def test_bear_walks_forward_as_todays_tasks_are_done(tasks, topics) -> None:
+    """用真實題庫排一份重點題組計畫，照今日任務頁的順序一題一題做：小熊的關卡編號只會往前走。"""
+    import dataclasses
+
+    from core.game_map import build_map, build_stages, focus_route, route_positions
+
+    focus = {t.id: i % 3 + 1 for i, t in enumerate(tasks) if i % 4 == 0}  # 任意挑一組當重點題組
+    focus_tasks = [t for t in tasks if t.id in focus]
+    plan = build_plan(
+        topics=topics, tasks=focus_tasks, start_date=_dt.date(2026, 10, 24), days=10,
+        daily_minutes=210, user=UserContext(), jd=JDStats(),
+    )
+    today = [i.task_id for i in plan.items if i.scheduled_date == _dt.date(2026, 10, 24)]
+    assert len(today) >= 3
+    route = route_positions(topics, tasks, focus, focus_only=True)
+    in_page_order = sorted(today, key=route.__getitem__)  # 今日任務頁的列法
+
+    stages = focus_route(build_stages(build_map(topics, tasks, set()), tasks, set()), focus)
+    done: set[int] = set()
+    positions = []
+    for task_id in in_page_order:
+        current = [dataclasses.replace(s, done=s.task_id in done) for s in stages]
+        bear = bear_stage(current, PlanMarks(today=tuple(today)))
+        assert bear.task_id == task_id, "小熊站的就是今日任務頁列的下一題"
+        positions.append(route[bear.task_id])
+        done.add(task_id)
+    assert positions == sorted(positions)
+
+
+def test_map_orders_a_topic_like_the_planner(tasks, topics) -> None:
+    """同一主題裡，地圖的關卡順序跟排程器排的順序一樣（難度 → 預估分鐘 → id）。"""
+    from core.game_map import build_map, build_stages
+
+    stages = build_stages(build_map(topics, tasks, set()), tasks, set())
+    plan = build_plan(
+        topics=topics, tasks=tasks, start_date=_dt.date(2026, 10, 24), days=120,
+        daily_minutes=600, user=UserContext(), jd=JDStats(),
+    )
+    planned = [i.task_id for i in sorted(plan.items, key=lambda i: (i.scheduled_date, i.order_in_day))]
+    for topic in {s.topic_id for s in stages}:
+        on_map = [s.task_id for s in stages if s.topic_id == topic]
+        in_plan = [t for t in planned if t in set(on_map)]
+        assert in_plan == [t for t in on_map if t in set(in_plan)], topic
 
 
 def test_when_today_is_done_bear_returns_to_the_route() -> None:

@@ -20,6 +20,7 @@ if str(_ROOT) not in sys.path:
 from api.deps import get_current_user, show_demo_notice  # noqa: E402
 from core import clock  # noqa: E402
 from core.calendar_export import DayTask, build_ics  # noqa: E402
+from core.game_map import route_positions  # noqa: E402
 from core.encouragement import Cheer, template_message, toast_text  # noqa: E402
 from core.jd_parser import highlight_markdown, md_escape  # noqa: E402
 from db import repositories as repo  # noqa: E402
@@ -113,13 +114,17 @@ def _render_page() -> None:
             _report_replan(result)
 
         summary = repo.progress_summary(plan, today)
+        # 照地圖路線的順序列（跟小熊站的位置一致），不照排程器的 order_in_day：
+        # 排程器把同主題的題目排在一起，地圖照「暖身 → 主力 → 進階」編號，兩邊不一樣時
+        # 使用者照著做會在地圖上從第 1 關跳到第 3 關（2026-10-24 回報）。哪一天做哪幾題不變。
+        route = _route_positions(session, plan)
         today_items = sorted(
             (
                 i
                 for i in plan.items
                 if i.scheduled_date == today and i.status != "skipped"
             ),
-            key=lambda i: i.order_in_day,
+            key=lambda i: (route.get(i.task_id, len(route)), i.order_in_day),
         )
 
         # 進度條在版面上要留在最上面，但它的數字是**項目迴圈跑完之後**才正確的：
@@ -157,7 +162,7 @@ def _render_page() -> None:
             # 所以這裡拿到的是這一輪打勾之後的狀態。
             _show_progress(repo.progress_summary(plan, today), plan, end_date, today)
 
-        _show_upcoming(plan, today)
+        _show_upcoming(plan, today, route)
         _show_calendar(plan, today, repo.user_tz(session, user_id))
 
 
@@ -349,7 +354,16 @@ def _show_empty_day(plan, today: _dt.date, end_date: _dt.date) -> None:
         st.success("整份計畫都完成了。到「Home」排下一份。")
 
 
-def _show_upcoming(plan, today: _dt.date) -> None:
+def _route_positions(session, plan) -> dict[int, int]:
+    """這份計畫的題目在地圖路線上的位置。計畫只排了重點題組，就用重點路線的編號。"""
+    focus = repo.load_focus_stages(session)
+    focus_only = bool(focus) and all(i.task_id in focus for i in plan.items)
+    return route_positions(
+        repo.load_topic_nodes(session), repo.load_task_inputs(session), focus, focus_only=focus_only
+    )
+
+
+def _show_upcoming(plan, today: _dt.date, route: dict[int, int]) -> None:
     with st.expander("接下來幾天"):
         grouped: dict[_dt.date, list] = {}
         for i in plan.items:
@@ -359,7 +373,7 @@ def _show_upcoming(plan, today: _dt.date) -> None:
             st.write("之後沒有排定的項目了。")
             return
         for day in sorted(grouped)[:5]:
-            items = sorted(grouped[day], key=lambda i: i.order_in_day)
+            items = sorted(grouped[day], key=lambda i: (route.get(i.task_id, len(route)), i.order_in_day))
             total = sum(i.task.est_minutes for i in items)
             st.markdown(f"**{day:%m/%d}**　{len(items)} 題 / {total} 分鐘")
             for i in items:

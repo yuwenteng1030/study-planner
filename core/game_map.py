@@ -170,7 +170,9 @@ def build_stages(levels: list[Level], tasks: Iterable[TaskInput], done_task_ids:
     """把每一題攤成一關，照路線順序排好。
 
     主題的順序沿用 ``build_map``（區號、重要性）；同一主題裡 Easy → Medium → Hard，
-    同難度照題目 id。觀念關沒有題目，所以不在路線上。
+    同難度短的先、再照題目 id——**跟排程器（``core.planner``）同一個規則**。
+    原本地圖少比了預估分鐘，同主題裡兩邊的順序對不上，小熊會從第 1 關跳到第 3 關、
+    再回頭做第 2 關（2026-10-24 使用者回報）。觀念關沒有題目，所以不在路線上。
 
     這裡不鎖關：後面的關卡照樣能點。「下一關」只是小熊站的位置（``next_stage``）。
     """
@@ -182,7 +184,7 @@ def build_stages(levels: list[Level], tasks: Iterable[TaskInput], done_task_ids:
     for level in levels:
         members = sorted(
             by_topic.get(level.topic_id, []),
-            key=lambda t: (difficulty_order(t.difficulty), t.id),
+            key=lambda t: (difficulty_order(t.difficulty), t.est_minutes, t.id),
         )
         stages.extend(
             Stage(
@@ -218,16 +220,33 @@ class PlanMarks:
 
 
 def bear_stage(stages: list[Stage], marks: PlanMarks) -> Stage | None:
-    """小熊站哪一關：今天排的第一個還沒做的題目；今天的都做完（或沒計畫）就回到路線上第一個沒做的。
+    """小熊站哪一關：今天排的題目裡，**路線上最前面**那個還沒做的；今天的都做完（或沒計畫）
+    就回到路線上第一個沒做的。
+
+    照路線順序、不照今天的排程順序：排程把同一主題的題目排在一起，地圖照「暖身 → 主力 →
+    進階」編號，兩邊不一樣時小熊會在編號上跳來跳去（做完第 1 關跳到第 3 關）。今日任務頁
+    也照同一個路線順序列（``route_positions``），兩頁說的「下一題」才會是同一題。
 
     不先看過期的：落後要靠「今日任務」的重排處理，小熊跑回三天前會讓今天的任務看起來不見了。
     """
-    by_id = {s.task_id: s for s in stages}
-    for task_id in marks.today:
-        stage = by_id.get(task_id)
-        if stage is not None and not stage.done:
+    today = set(marks.today)
+    for stage in stages:
+        if stage.task_id in today and not stage.done:
             return stage
     return next_stage(stages)
+
+
+def route_positions(
+    topics: list[TopicNode], tasks: list[TaskInput], focus_stages: dict[int, int], *, focus_only: bool
+) -> dict[int, int]:
+    """題目 id → 在地圖路線上的位置（0 起算）。今日任務頁用它把今天的題目照地圖的順序列。
+
+    ``focus_only`` 時用重點路線的編號（計畫只排重點題組時，地圖預設也是這個版本）。
+    """
+    stages = build_stages(build_map(topics, tasks, set()), tasks, set())
+    if focus_only:
+        stages = focus_route(stages, focus_stages)
+    return {s.task_id: i for i, s in enumerate(stages)}
 
 
 #: 地圖元件會送回來的事件種類。

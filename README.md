@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、從 JD 自動找社群面經、每日提醒（行事曆檔）、公開展示版皆可運作，407 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、從 JD 自動找社群面經、每日提醒（行事曆檔）、公開展示版皆可運作，409 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -257,7 +257,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 407 個測試
+pytest -q                          # 409 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
@@ -308,7 +308,7 @@ STUDY_PLANNER_DEMO=1 DATABASE_URL=sqlite:///demo.db streamlit run app/Home.py
 | `tests/test_map_completion.py` | 地圖上的「我 submit 過了」：計畫內勾計畫項目、計畫外另存一筆、按兩次只記一次、取消要連舊計畫一起清、不存在的題目擋下 |
 | `tests/test_review.py` | 回顧：照原本的日子分期、還沒到的日子不算、砍掉的題目留在分母、四種落後訊號分開數、只有過期後被挪才算落後（用真的排程器測）、舊計畫沒輪到的題不進分母 |
 | `tests/test_calibration.py` | 估時校正：沒填、0 分鐘、重做的題不算（剛好等於預估的算），中位數不被一題拖走，筆數不夠不下結論，只撈自己打勾的項目 |
-| `tests/test_map_plan_link.py` | 地圖與每日計畫連動：今天的關卡藍圈、過期的紅圈、被移出計畫的不標、小熊照今天的順序走、今天做完回到路線 |
+| `tests/test_map_plan_link.py` | 地圖與每日計畫連動：今天的關卡藍圈、過期的紅圈、被移出計畫的不標、小熊在今天的題目裡照路線順序走（照今日任務頁一題一題做，編號只往前）、地圖同主題的順序跟排程器一樣、今天做完回到路線 |
 | `tests/test_stars.py` | 星等：一星看 Easy 3 題、二星 Medium 過半、三星 Hard 全做、不能跳級、觀念關沒有星 |
 | `tests/test_task_data.py` | 題庫說明沒有被 CSV 逗號截斷、每列欄位數正確 |
 | `tests/test_key_points.py` | 主題重點必須是字串：YAML 沒加引號的冒號會變成 dict、匯入時擋下、舊資料照樣顯示得出來 |
