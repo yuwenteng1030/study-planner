@@ -56,26 +56,26 @@ def main() -> None:
     _show_saved(user_id, rows, topic_names)
 
 
-_TITLE_KEY = "jd_title"
-_BODY_KEY = "jd_body"
 _SAVED_KEY = "jd_saved_message"
+_FORM_ROUND_KEY = "jd_form_round"
 
 
 def _show_form(user_id: int) -> None:
     # 不用 clear_on_submit：存檔失敗（例如已存滿）時表單也會被清空，貼了兩萬字的人會很想哭。
-    # 存成功才清：widget 畫出來之後不能改它的值，所以記一個旗標、重跑一輪，在畫之前清掉。
+    # 存成功才清空。做法是換一組新的 widget key（第幾輪就用第幾號）：只把舊 key 從
+    # session_state 刪掉沒有用——瀏覽器那邊的輸入框還留著上一份的文字，
+    # 實測存完第二份 JD 時，畫面上還是第一份的內容（AppTest 測不出來）。
     message = st.session_state.pop(_SAVED_KEY, None)
     if message is not None:
-        st.session_state.pop(_TITLE_KEY, None)
-        st.session_state.pop(_BODY_KEY, None)
         _show_saved_message(message)
-    with st.form("jd_form"):
+    form_round = st.session_state.get(_FORM_ROUND_KEY, 0)
+    with st.form(f"jd_form_{form_round}"):
         title = st.text_input(
-            "幫這份 JD 取個名字", max_chars=120, placeholder="例如：後端工程師 A", key=_TITLE_KEY
+            "幫這份 JD 取個名字", max_chars=120, placeholder="例如：後端工程師 A", key=f"jd_title_{form_round}"
         )
         body = st.text_area(
             "JD 內容", height=220, max_chars=MAX_JD_CHARS, placeholder="把職缺頁面上的工作內容與條件整段貼進來",
-            key=_BODY_KEY,
+            key=f"jd_body_{form_round}",
         )
         submitted = st.form_submit_button("分析並儲存", type="primary")
     if not submitted:
@@ -89,6 +89,9 @@ def _show_form(user_id: int) -> None:
         st.error(str(exc))
         return
     st.session_state[_SAVED_KEY] = (saved_title, found)
+    st.session_state[_FORM_ROUND_KEY] = form_round + 1
+    st.session_state.pop(f"jd_title_{form_round}", None)  # 舊那一輪的值用不到了，不要一直留著
+    st.session_state.pop(f"jd_body_{form_round}", None)
     st.rerun()
 
 

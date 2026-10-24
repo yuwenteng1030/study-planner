@@ -226,6 +226,14 @@ def test_jd_page_saves_and_shows_citations(seeded_app_db) -> None:
     assert not app.exception, [str(e.value) for e in app.exception]
     assert app.success and "UI 測試職缺" in app.success[0].value
     assert app.text_area[0].value == "", "存成功才清空表單"
+    # 接著貼第二份：表單是新的一份（新的 widget key），瀏覽器端也不會留著上一份的文字
+    assert app.text_area[0].key != "jd_body_0"
+    app.text_input[0].set_value("UI 測試職缺二")
+    app.text_area[0].set_value("Heaps and priority queues.")
+    app.button[0].click().run()
+    assert not app.exception
+    assert "UI 測試職缺二" in app.success[0].value
+    assert app.text_input[0].value == "" and app.text_area[0].value == ""
     assert any("**binary search**" in m.value for m in app.markdown)
 
     # 刪掉它，頁面回到原本的樣子
