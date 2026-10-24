@@ -19,6 +19,15 @@ v0.1–v0.3 期間不實作登入，`get_current_user()` 固定回傳 user_id=1�
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+# 專案根目錄的 .env（ANTHROPIC_API_KEY 等）。每一頁都 import 這個檔案，放這裡就每頁都讀得到。
+# 已經設在環境變數裡的值不會被 .env 蓋掉（部署平台的 secrets 優先）。
+# 測試設 STUDY_PLANNER_NO_DOTENV=1 跳過：不然開發機上的 .env 會讓測試去呼叫真的 Claude。
+if not os.environ.get("STUDY_PLANNER_NO_DOTENV"):
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 # 單人模式下使用的固定使用者。開放登入後移除。
 _SINGLE_USER_ID = 1

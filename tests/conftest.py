@@ -33,8 +33,10 @@ _TMP_DIR = tempfile.mkdtemp(prefix="study-planner-test-")
 _TEST_DB = Path(_TMP_DIR) / "ui-test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB}"
 
-# 測試一律不呼叫外部服務。有 key 也拿掉，否則測試結果會依環境而變。
+# 測試一律不呼叫外部服務。有 key 也拿掉，否則測試結果會依環境而變；
+# 也不讀專案根目錄的 .env（api/deps.py 會讀），不然 key 又被放回來。
 os.environ.pop("ANTHROPIC_API_KEY", None)
+os.environ["STUDY_PLANNER_NO_DOTENV"] = "1"
 
 
 @pytest.fixture(autouse=True)
