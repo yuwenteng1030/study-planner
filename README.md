@@ -6,7 +6,7 @@
 
 使用者填下想準備的題型、每天可投入幾小時、希望幾天內完成。網站排出該做哪些項目、每天提醒要完成什麼、並說明**每一項為什麼重要**。
 
-> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、每日提醒（行事曆檔）、公開展示版皆可運作，381 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
+> 開發中。v0.1-core：評分、排程、落後重排、進度記錄、資料匯出與刪除、學習地圖（點關卡就到 HackerRank 做題）、JD 出處引用、每日提醒（行事曆檔）、公開展示版皆可運作，384 個測試通過。題庫 125 題，涵蓋知識地圖 20 / 21 個主題。
 
 ## 跟「直接問 ChatGPT」有什麼不同
 
@@ -232,7 +232,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt   # 執行只需要 requirements.txt；這份多了 pytest 與 ruff
 
 python -m scripts.import_data      # 建表（Alembic migration）並匯入 data/topics.yaml 與 data/tasks.csv
-pytest -q                          # 381 個測試
+pytest -q                          # 384 個測試
 ruff check .                       # lint（CI 也跑這兩行）
 streamlit run app/Home.py
 ```
