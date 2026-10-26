@@ -120,3 +120,81 @@ def test_untimed_map_completions_are_not_calibration_samples(db_session) -> None
     task_id = repo.load_task_inputs(db_session)[0].id
     repo.mark_task_done_for_user(db_session, 1, task_id)  # 沒計時
     assert repo.load_calibration_samples(db_session, 1) == []
+
+
+# ---------------------------------------------------------------------------
+# 暫停與繼續
+# ---------------------------------------------------------------------------
+
+
+def _shift(session, *, start_ago: float, paused_ago: float | None = None) -> None:
+    """把開始時間（與暫停時間）往前調：開始於 ``start_ago`` 分鐘前、暫停於 ``paused_ago`` 分鐘前。"""
+    row = session.get(ActiveAdventure, 1)
+    now = clock.utc_now()
+    row.started_at = now - _dt.timedelta(minutes=start_ago)
+    if paused_ago is not None:
+        row.paused_at = now - _dt.timedelta(minutes=paused_ago)
+    session.flush()
+
+
+def test_paused_time_is_not_counted() -> None:
+    t0 = _dt.datetime(2026, 10, 26, 9, 0)
+    # 做 10 分鐘、停 30 分鐘、再做 5 分鐘 → 15 分鐘
+    assert repo.adventure_minutes(t0, t0 + _dt.timedelta(minutes=45), paused_seconds=30 * 60) == 15
+    # 暫停中：只算到按暫停那一刻，之後過多久都一樣
+    paused_at = t0 + _dt.timedelta(minutes=12)
+    assert repo.adventure_minutes(t0, t0 + _dt.timedelta(hours=3), paused_at=paused_at) == 12
+
+
+def test_pause_then_resume_moves_the_pause_into_the_total(db_session) -> None:
+    item = _plan(db_session).items[0]
+    repo.start_adventure(db_session, 1, item.task_id)
+    _shift(db_session, start_ago=40, paused_ago=30)  # 做了 10 分鐘就暫停，已經停了 30 分鐘
+    repo.pause_adventure(db_session, 1)  # 已經暫停：再按一次不會改掉暫停的時間點
+    assert repo.adventure_minutes_of(repo.load_adventure(db_session, 1)) == 10
+
+    repo.resume_adventure(db_session, 1)
+    adv = repo.load_adventure(db_session, 1)
+    assert adv.paused_at is None and 29 * 60 <= adv.paused_seconds <= 31 * 60
+    # 繼續之後時間又在走，讀的當下可能剛好過了 10 分鐘幾毫秒，無條件進位成 11
+    assert repo.adventure_minutes_of(adv) in (10, 11)
+
+    repo.mark_item_done(db_session, item)
+    assert item.actual_minutes in (10, 11)
+
+
+def test_finishing_while_paused_counts_up_to_the_pause(db_session) -> None:
+    item = _plan(db_session).items[0]
+    repo.start_adventure(db_session, 1, item.task_id)
+    _shift(db_session, start_ago=60, paused_ago=45)  # 做 15 分鐘後暫停，忘了按繼續就直接完成
+    repo.mark_item_done(db_session, item)
+    assert item.actual_minutes == 15
+    assert repo.load_adventure(db_session, 1) is None
+
+
+def test_switching_task_clears_the_pause(db_session) -> None:
+    plan = _plan(db_session)
+    a, b = plan.items[0].task_id, plan.items[1].task_id
+    repo.start_adventure(db_session, 1, a)
+    repo.pause_adventure(db_session, 1)
+    repo.start_adventure(db_session, 1, b)
+    adv = repo.load_adventure(db_session, 1)
+    assert adv.task_id == b and adv.paused_at is None and adv.paused_seconds == 0
+
+
+def test_starting_the_same_task_while_paused_resumes_it(db_session) -> None:
+    """暫停中又點了一次題目連結＝回來做題：繼續計時，不從頭算。"""
+    a = _plan(db_session).items[0].task_id
+    repo.start_adventure(db_session, 1, a)
+    _shift(db_session, start_ago=20, paused_ago=15)
+    repo.start_adventure(db_session, 1, a)
+    adv = repo.load_adventure(db_session, 1)
+    assert adv.paused_at is None
+    assert repo.adventure_minutes_of(adv) in (5, 6)  # 同上：繼續之後時間在走
+
+
+def test_pause_and_resume_without_a_timer_do_nothing(db_session) -> None:
+    repo.ensure_user(db_session, 1)
+    repo.pause_adventure(db_session, 1)
+    repo.resume_adventure(db_session, 1)
+    assert repo.load_adventure(db_session, 1) is None

@@ -252,7 +252,7 @@ def test_next_stage_waits_at_the_end_when_everything_is_done() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", ["pick", "close", "done", "undo"])
+@pytest.mark.parametrize("kind", ["pick", "close", "done", "undo", "start", "cancel", "pause", "resume"])
 def test_valid_map_actions_pass(kind: str) -> None:
     assert parse_map_action({"type": kind, "task": 7}, {7, 8}) == (kind, 7)
 

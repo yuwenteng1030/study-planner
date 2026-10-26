@@ -407,6 +407,10 @@ class ActiveAdventure(Base):
     task_id: Mapped[int] = mapped_column(Integer, ForeignKey("tasks.id"), nullable=False)
     #: 開始的時間（UTC）
     started_at: Mapped[_dt.datetime] = mapped_column(DateTime, nullable=False)
+    #: 暫停中的話，按暫停的時間（UTC）；沒暫停是 None
+    paused_at: Mapped[_dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    #: 之前幾次暫停加起來的秒數（不含目前這一次），算經過時間時扣掉
+    paused_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
 class JobDescription(Base):

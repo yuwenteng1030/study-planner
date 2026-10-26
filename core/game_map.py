@@ -250,7 +250,9 @@ def route_positions(
 
 
 #: 地圖元件會送回來的事件種類。
-MAP_ACTIONS: frozenset[str] = frozenset({"pick", "close", "done", "undo", "start", "cancel"})
+MAP_ACTIONS: frozenset[str] = frozenset(
+    {"pick", "close", "done", "undo", "start", "cancel", "pause", "resume"}
+)
 
 
 def parse_map_action(action: object, known_ids: Iterable[int]) -> tuple[str, int] | None:

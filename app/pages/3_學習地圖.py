@@ -131,14 +131,18 @@ export default function (component) {
     return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
   };
   if (parentElement.__advTimer) clearInterval(parentElement.__advTimer);
+  // 計時中：伺服器給固定的起算點，現在減掉它就是做了多久；暫停中：給停住的毫秒數
+  const advText = () => fmt(adv.paused ? adv.elapsed_ms : Date.now() - adv.base_ms);
+  // 小卡上的那一行：暫停中不會每秒更新，所以建立時就要寫對
+  const advLine = () => (adv.paused ? `⏸ 暫停中 ${advText()}` : `🧭 冒險中 ${advText()}`);
   if (adv) {
     const tick = () => {
-      const text = `🧭 ${fmt(Date.now() - adv.started_ms)}`;
-      root.querySelectorAll('.adv-time').forEach((el) => { el.textContent = text; });
-      root.querySelectorAll('.adv-line').forEach((el) => { el.textContent = `🧭 冒險中 ${fmt(Date.now() - adv.started_ms)}`; });
+      const t = advText();
+      root.querySelectorAll('.adv-time').forEach((el) => { el.textContent = adv.paused ? `⏸ ${t}` : `🧭 ${t}`; });
+      root.querySelectorAll('.adv-line').forEach((el) => { el.textContent = advLine(); });
     };
     tick();
-    parentElement.__advTimer = setInterval(tick, 1000);
+    if (!adv.paused) parentElement.__advTimer = setInterval(tick, 1000);
   }
 
   root.querySelectorAll('.stage').forEach((node) => {
@@ -166,7 +170,7 @@ export default function (component) {
       add('div', 'title', focus.title);
       add('div', 'meta', `${focus.topic} · ${focus.difficulty}` + (focus.done ? ' · 已完成 ✓' : ''));
       const adventuring = adv && adv.task === focus.task && !focus.done;
-      if (adventuring) add('div', 'adv-line', '🧭 冒險中');
+      if (adventuring) add('div', 'adv-line', advLine());
       const row = add('div', 'row');
       if (!focus.done) {
         if (focus.url) {
@@ -187,6 +191,12 @@ export default function (component) {
         done.onclick = () => send('done', focus.task);
         row.appendChild(done);
         if (adventuring) {
+          // 暫停／繼續也放在小卡上：地圖一打開會捲到小熊，上方面板的按鈕常常不在畫面裡
+          const toggle = document.createElement('button');
+          toggle.className = 'undo';
+          toggle.textContent = adv.paused ? '▶ 繼續計時' : '⏸ 暫停';
+          toggle.onclick = () => send(adv.paused ? 'resume' : 'pause', focus.task);
+          row.appendChild(toggle);
           const stop = document.createElement('button');
           stop.className = 'undo';
           stop.textContent = '放棄計時';
@@ -319,7 +329,7 @@ def _mark_done(task_id: int, title: str) -> None:
         with session_scope() as session:
             adventure = repo.load_adventure(session, user_id)
             timed = (
-                repo.adventure_minutes(adventure.started_at)
+                repo.adventure_minutes_of(adventure)
                 if adventure is not None and adventure.task_id == task_id
                 else None
             )
@@ -374,6 +384,16 @@ def _start_adventure(task_id: int) -> None:
     st.session_state[FOCUS_KEY] = task_id
 
 
+def _pause_adventure() -> None:
+    with session_scope() as session:
+        repo.pause_adventure(session, get_current_user())
+
+
+def _resume_adventure() -> None:
+    with session_scope() as session:
+        repo.resume_adventure(session, get_current_user())
+
+
 def _cancel_adventure() -> None:
     with session_scope() as session:
         repo.cancel_adventure(session, get_current_user())
@@ -407,6 +427,12 @@ def _on_map_action() -> None:
         _start_adventure(task)
     elif kind == "cancel":
         _cancel_adventure()
+    elif kind == "pause":
+        _pause_adventure()
+        st.session_state[FOCUS_KEY] = task  # 小卡留著，才看得到「繼續計時」
+    elif kind == "resume":
+        _resume_adventure()
+        st.session_state[FOCUS_KEY] = task
 
 
 # ---------------------------------------------------------------------------
@@ -435,7 +461,20 @@ def main() -> None:
         marks = repo.plan_marks(plan, today)
         focus_stages = repo.load_focus_stages(session)
         adventure = repo.load_adventure(session, get_current_user())
-        adventure = (adventure.task_id, adventure.started_at) if adventure is not None else None
+        # 離開交易前取成一般的值：之後畫面還要用，ORM 物件出了交易就讀不到
+        adventure = (
+            (
+                adventure.task_id,
+                repo.adventure_seconds(
+                    adventure.started_at, paused_seconds=adventure.paused_seconds or 0,
+                    paused_at=adventure.paused_at,
+                ),
+                adventure.paused_at is not None,
+                # 計時中的起算點＝開始時間往後推「已暫停的秒數」；計時中這個值不會變
+                adventure.started_at + _dt.timedelta(seconds=adventure.paused_seconds or 0),
+            )
+            if adventure is not None else None
+        )
 
     if not tasks:
         st.info("還沒有題庫。先執行 `python -m scripts.import_data` 匯入題庫。")
@@ -617,25 +656,35 @@ def _render_hud(all_stages: list[Stage], done: int, total: int, focus_only: bool
 
 
 def _adventure_payload(adventure) -> dict | None:
-    """給地圖的 JavaScript：哪一題在冒險、從什麼時候開始（毫秒，UTC），秒數在瀏覽器裡即時跳。"""
+    """給地圖的 JavaScript：哪一題在冒險、到現在做了幾毫秒（暫停的不算）、是不是暫停中。
+
+    計時中的話秒數在瀏覽器裡即時跳；暫停中就停在那個數字。
+    """
     if adventure is None:
         return None
-    task_id, started_at = adventure
-    started = started_at.replace(tzinfo=_dt.timezone.utc)
-    return {"task": task_id, "started_ms": int(started.timestamp() * 1000)}
+    task_id, seconds, paused, base = adventure
+    if paused:
+        return {"task": task_id, "paused": True, "elapsed_ms": int(seconds * 1000)}
+    # 計時中送固定的起算點（毫秒，UTC），每次重跑都一樣，地圖不會因為秒數變了而重畫
+    base_ms = int(base.replace(tzinfo=_dt.timezone.utc).timestamp() * 1000)
+    return {"task": task_id, "paused": False, "base_ms": base_ms}
 
 
 def _render_adventure_panel(adventure, title: str, urls: dict[int, str]) -> None:
     """正在冒險時，上方面板換成冒險狀態：題目、已經多久、回到題目、完成、放棄。"""
-    task_id, started_at = adventure
-    minutes = repo.adventure_minutes(started_at)
+    task_id, seconds, paused, _ = adventure
+    minutes = repo.adventure_seconds_to_minutes(seconds)
     with st.container(border=True):
-        st.markdown(f"🧭 **冒險中**：{_md(title)}")
-        st.caption(
-            f"已經 {minutes} 分鐘（地圖上的計時每秒更新）。按「我 submit 過了」時，"
-            "經過的時間會自動記成實際分鐘數。"
-        )
-        left, mid, right = st.columns(3)
+        if paused:
+            st.markdown(f"⏸ **暫停中**：{_md(title)}")
+            st.caption(f"目前累計 {minutes} 分鐘，暫停的時間不會算進去。按「繼續計時」回來接著算。")
+        else:
+            st.markdown(f"🧭 **冒險中**：{_md(title)}")
+            st.caption(
+                f"已經 {minutes} 分鐘（地圖上的計時每秒更新）。按「我 submit 過了」時，"
+                "經過的時間會自動記成實際分鐘數；暫停的時間不算。"
+            )
+        left, mid, toggle, right = st.columns(4)
         url = safe_url(urls.get(task_id))
         if url:
             left.link_button("回到題目 ↗", url, width="stretch")
@@ -643,6 +692,10 @@ def _render_adventure_panel(adventure, title: str, urls: dict[int, str]) -> None
             "我 submit 過了", key=f"done_adv_{task_id}", type="primary", width="stretch",
             on_click=_mark_done, args=(task_id, title),
         )
+        if paused:
+            toggle.button("▶ 繼續計時", key=f"resume_adv_{task_id}", width="stretch", on_click=_resume_adventure)
+        else:
+            toggle.button("⏸ 暫停", key=f"pause_adv_{task_id}", width="stretch", on_click=_pause_adventure)
         right.button("放棄計時", key=f"cancel_adv_{task_id}", width="stretch", on_click=_cancel_adventure)
 
 

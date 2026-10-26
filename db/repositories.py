@@ -388,7 +388,32 @@ def start_adventure(session: Session, user_id: int, task_id: int) -> None:
     elif row.task_id != task_id:
         row.task_id = task_id
         row.started_at = clock.utc_now()
-    # 同一題再按一次「開始」：不重新計時（例如不小心又點了一次題目連結）
+        row.paused_at = None
+        row.paused_seconds = 0
+    elif row.paused_at is not None:
+        # 同一題暫停中又按「開始」（例如又點了一次題目連結）：當成回來做題，繼續計時
+        resume_adventure(session, user_id)
+    # 同一題計時中再按一次「開始」：不重新計時（例如不小心又點了一次題目連結）
+
+
+def pause_adventure(session: Session, user_id: int) -> None:
+    """暫停計時。沒在計時或已經暫停就不動。"""
+    row = session.get(ActiveAdventure, user_id)
+    if row is not None and row.paused_at is None:
+        row.paused_at = clock.utc_now()
+        session.flush()
+
+
+def resume_adventure(session: Session, user_id: int) -> None:
+    """繼續計時：這次暫停的秒數加進累計，之後算經過時間時扣掉。"""
+    row = session.get(ActiveAdventure, user_id)
+    if row is None or row.paused_at is None:
+        return
+    row.paused_seconds = (row.paused_seconds or 0) + max(
+        0, round((clock.utc_now() - row.paused_at).total_seconds())
+    )
+    row.paused_at = None
+    session.flush()
 
 
 def load_adventure(session: Session, user_id: int) -> ActiveAdventure | None:
@@ -402,12 +427,43 @@ def cancel_adventure(session: Session, user_id: int) -> None:
         session.flush()  # 同一個交易裡接著讀，要看得到「已經沒有冒險」
 
 
-def adventure_minutes(started_at: _dt.datetime, now: _dt.datetime | None = None) -> int:
-    """經過幾分鐘（無條件進位，至少 1，最多 ``ADVENTURE_MAX_MINUTES``）。"""
+def adventure_seconds(
+    started_at: _dt.datetime,
+    now: _dt.datetime | None = None,
+    *,
+    paused_seconds: int = 0,
+    paused_at: _dt.datetime | None = None,
+) -> float:
+    """實際做題的秒數：從開始到現在（暫停中就算到按暫停的那一刻），扣掉之前暫停的時間。"""
+    end = paused_at or now or clock.utc_now()
+    return max(0.0, (end - started_at).total_seconds() - (paused_seconds or 0))
+
+
+def adventure_minutes(
+    started_at: _dt.datetime,
+    now: _dt.datetime | None = None,
+    *,
+    paused_seconds: int = 0,
+    paused_at: _dt.datetime | None = None,
+) -> int:
+    """經過幾分鐘（無條件進位，至少 1，最多 ``ADVENTURE_MAX_MINUTES``），暫停的時間不算。"""
+    return adventure_seconds_to_minutes(
+        adventure_seconds(started_at, now, paused_seconds=paused_seconds, paused_at=paused_at)
+    )
+
+
+def adventure_seconds_to_minutes(seconds: float) -> int:
+    """秒數換成記錄用的分鐘數：無條件進位，至少 1，最多 ``ADVENTURE_MAX_MINUTES``。"""
     import math
 
-    seconds = ((now or clock.utc_now()) - started_at).total_seconds()
     return max(1, min(ADVENTURE_MAX_MINUTES, math.ceil(seconds / 60)))
+
+
+def adventure_minutes_of(row: ActiveAdventure, now: _dt.datetime | None = None) -> int:
+    """``adventure_minutes`` 的方便版：直接給一場冒險。"""
+    return adventure_minutes(
+        row.started_at, now, paused_seconds=row.paused_seconds or 0, paused_at=row.paused_at
+    )
 
 
 def take_adventure_minutes(session: Session, user_id: int, task_id: int) -> int | None:
@@ -415,7 +471,7 @@ def take_adventure_minutes(session: Session, user_id: int, task_id: int) -> int 
     row = session.get(ActiveAdventure, user_id)
     if row is None or row.task_id != task_id:
         return None
-    minutes = adventure_minutes(row.started_at)
+    minutes = adventure_minutes_of(row)
     session.delete(row)
     session.flush()
     return minutes

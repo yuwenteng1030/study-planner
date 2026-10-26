@@ -230,6 +230,16 @@ def _start_timer(task_id: int) -> None:
         repo.start_adventure(session, get_current_user(), task_id)
 
 
+def _pause_timer() -> None:
+    with session_scope() as session:
+        repo.pause_adventure(session, get_current_user())
+
+
+def _resume_timer() -> None:
+    with session_scope() as session:
+        repo.resume_adventure(session, get_current_user())
+
+
 def _cancel_timer() -> None:
     with session_scope() as session:
         repo.cancel_adventure(session, get_current_user())
@@ -292,9 +302,21 @@ def _render_item(
             if not done:
                 timing = adventure is not None and adventure.task_id == task.id
                 if timing:
-                    minutes = repo.adventure_minutes(adventure.started_at)
-                    st.caption(f"🧭 計時中，已經 {minutes} 分鐘。打勾時沒填分鐘數，就用計時的時間。")
-                    st.button("放棄計時", key=f"cancel_timer_{item.id}", on_click=_cancel_timer)
+                    minutes = repo.adventure_minutes_of(adventure)
+                    paused = adventure.paused_at is not None
+                    if paused:
+                        st.caption(f"⏸ 已暫停，目前累計 {minutes} 分鐘。暫停的時間不會算進去。")
+                    else:
+                        st.caption(f"🧭 計時中，已經 {minutes} 分鐘。打勾時沒填分鐘數，就用計時的時間。")
+                    toggle, cancel = st.columns(2)
+                    if paused:
+                        toggle.button("▶ 繼續計時", key=f"resume_timer_{item.id}", on_click=_resume_timer,
+                                      width="stretch")
+                    else:
+                        toggle.button("⏸ 暫停", key=f"pause_timer_{item.id}", on_click=_pause_timer,
+                                      width="stretch")
+                    cancel.button("放棄計時", key=f"cancel_timer_{item.id}", on_click=_cancel_timer,
+                                  width="stretch")
                 else:
                     st.button(
                         "⏱ 開始計時", key=f"start_timer_{item.id}", on_click=_start_timer, args=(task.id,),
