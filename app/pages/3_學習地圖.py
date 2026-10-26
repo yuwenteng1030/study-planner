@@ -31,6 +31,7 @@ from core.game_map import (  # noqa: E402
     build_stages,
     experience,
     focus_route,
+    last_cleared_stage,
     parse_map_action,
 )
 from core.map_art import render_svg, safe_url, zone_theme  # noqa: E402
@@ -121,6 +122,14 @@ export default function (component) {
   }
 
   const send = (type, task) => setTriggerValue('action', { type, task });
+
+  // 點地圖空白處關掉小卡。用 onclick 指定（不是 addEventListener）：root 在重畫之間會沿用，
+  // 掛監聽會越掛越多。關卡、小卡、動物、連結各有自己的動作，點到它們不算空白
+  root.onclick = (e) => {
+    if (!data.focus) return;
+    if (e.target.closest('.stage, .card, .npc, a, button')) return;
+    send('close', data.focus.task);
+  };
 
   // 冒險計時：秒數在瀏覽器裡即時跳，不必等 Streamlit 重跑
   const adv = data.adventure;
@@ -293,10 +302,13 @@ export default function (component) {
   // 小熊換了位置（第一次打開、或剛破關）才捲過去；點別的關卡不要把畫面拉走
   // 稍等再捲、而且不用 smooth：元件剛掛上時頁面其他元素還在排版，
   // 平滑捲動會被接著來的版面變動打斷，結果停在頁首（手機寬度上實測過）
-  if (parentElement.__lastHere !== data.here) {
-    parentElement.__lastHere = data.here;
+  // 剛破關時捲到小卡那一關（下一關）：小熊停在剛過的關卡，跳著做的話下一關可能離很遠，
+  // 不捲過去就看不到「過關」的小卡
+  const scrollTo = data.focus && data.focus.cleared ? data.focus.task : data.here;
+  if (parentElement.__lastHere !== scrollTo) {
+    parentElement.__lastHere = scrollTo;
     setTimeout(() => {
-      const target = root.querySelector(`.stage[data-task="${data.here}"]`);
+      const target = root.querySelector(`.stage[data-task="${scrollTo}"]`);
       if (target) target.scrollIntoView({ block: 'center' });
     }, 250);
   }
@@ -445,7 +457,7 @@ def main() -> None:
     st.title("🗺️ 學習地圖")
     st.caption(
         "一關＝一題，從最下面的起點往上走。點關卡會在新分頁打開 HackerRank 的題目；"
-        "submit 之後回來按「我 submit 過了」，關卡變金色，小熊走到下一關。"
+        "submit 之後回來按「我 submit 過了」，關卡變金色，小熊停在這一關（小熊站在你最後過關的地方）。點地圖空白處可以關掉小卡。"
         "後面的關卡沒有鎖，想跳著做也可以。"
     )
 
@@ -454,6 +466,7 @@ def main() -> None:
         tasks = repo.load_task_inputs(session)
         urls = repo.load_task_urls(session)
         done_ids = repo.load_map_done_task_ids(session, get_current_user())
+        done_times = repo.load_done_times(session, get_current_user())
         today = repo.user_today(session, get_current_user())
         plan = repo.load_active_plan(session, get_current_user())
         # 先檢查要不要重排，地圖上的「今天」才會跟今日任務頁一致
@@ -522,8 +535,10 @@ def main() -> None:
         return
     by_id = {s.task_id: s for s in stages}
     st.session_state["_map_titles"] = {s.task_id: s.title for s in stages}
-    here = bear_stage(stages, marks)
+    here = bear_stage(stages, marks)  # 下一關：上方面板與破關後的小卡用
     here_is_today = here is not None and here.task_id in marks.today
+    # 小熊站在最後過關的那一關；一關都還沒過就站在下一關（起點）
+    bear = last_cleared_stage(stages, done_times) or here
 
     # 從「今日任務」的「在地圖上看」過來：?task=<id> 打開那一關的小卡（只用一次）
     linked = st.query_params.get("task")
@@ -568,7 +583,7 @@ def main() -> None:
         key=MAP_KEY,
         data={
             "svg": render_svg(
-                stages, urls, here.task_id if here else None,
+                stages, urls, bear.task_id if bear else None,
                 today_ids=frozenset(marks.today), overdue_ids=marks.overdue,
                 # 整個題庫時才標星：重點路線裡每一關都是重點
                 focus_ids=frozenset() if focus_only else frozenset(focus_stages),
@@ -579,7 +594,8 @@ def main() -> None:
                 adventure_id=adventure[0] if adventure else None,
             ),
             "adventure": _adventure_payload(adventure),
-            "here": here.task_id if here else None,
+            # 地圖打開或小熊換位置時捲到小熊那裡
+            "here": bear.task_id if bear else None,
             "focus": _focus_payload(focus, urls) if focus else None,
         },
         on_action_change=_on_map_action,
@@ -710,7 +726,7 @@ def _render_next_panel(
             st.markdown("🏆 **全部破關！** 每一題都做完了。")
             return
         label = "今天的下一題" if today else "下一關"
-        st.markdown(f"🐻 **{label}**：{_md(here.title)}")
+        st.markdown(f"👣 **{label}**：{_md(here.title)}")
         st.caption(f"{_md(here.topic_name)} · {here.difficulty}")
         left, right = st.columns(2)
         # 開始冒險＝開始計時；按下去之後面板會出現「回到題目 ↗」連結

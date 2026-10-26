@@ -198,3 +198,16 @@ def test_pause_and_resume_without_a_timer_do_nothing(db_session) -> None:
     repo.pause_adventure(db_session, 1)
     repo.resume_adventure(db_session, 1)
     assert repo.load_adventure(db_session, 1) is None
+
+
+def test_done_times_take_the_latest_of_plan_and_map_completions(db_session) -> None:
+    plan = _plan(db_session)
+    a, b = plan.items[0], plan.items[1]
+    repo.mark_item_done(db_session, a)
+    db_session.add(TaskCompletion(user_id=1, task_id=b.task_id,
+                                  done_at=clock.utc_now() + _dt.timedelta(minutes=5)))
+    db_session.flush()
+    times = repo.load_done_times(db_session, 1)
+    assert set(times) == {a.task_id, b.task_id}
+    assert times[b.task_id] > times[a.task_id]
+    assert b.task_id not in {i.task_id for i in plan.items if i.status == "done"}  # b 是計畫外完成的

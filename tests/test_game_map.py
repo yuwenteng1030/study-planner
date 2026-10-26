@@ -317,3 +317,47 @@ def test_real_focus_set_is_thirty_tasks_in_three_stages() -> None:
     # 考卷以 Medium 為主：重點題組裡 Medium 要過半
     diffs = Counter(r["difficulty"] for r in rows if r["focus"])
     assert diffs["Medium"] > 15
+
+
+# ---------------------------------------------------------------------------
+# 小熊站在最後過關的那一關
+# ---------------------------------------------------------------------------
+
+
+def test_bear_stands_on_the_most_recently_cleared_stage() -> None:
+    import datetime as _dt
+
+    from core.game_map import last_cleared_stage
+
+    t = _dt.datetime(2026, 10, 26, 9, 0)
+    stages = [_s(1, done=True), _s(2, done=True), _s(3, done=True), _s(4)]
+    # 跳著做：第 3 關先做、第 1 關最後做 → 小熊站第 1 關，不是路線上最後面的第 3 關
+    times = {3: t, 2: t + _dt.timedelta(minutes=5), 1: t + _dt.timedelta(minutes=9)}
+    assert last_cleared_stage(stages, times).task_id == 1
+
+
+def test_bear_has_no_cleared_stage_before_anything_is_done() -> None:
+    from core.game_map import last_cleared_stage
+
+    assert last_cleared_stage([_s(1), _s(2)], {}) is None
+
+
+def test_undone_stage_with_an_old_time_does_not_count() -> None:
+    """取消完成之後，那一題的舊完成時間還在資料庫裡，但地圖上它已經不是金色了。"""
+    import datetime as _dt
+
+    from core.game_map import last_cleared_stage
+
+    t = _dt.datetime(2026, 10, 26, 9, 0)
+    stages = [_s(1, done=True), _s(2, done=False)]
+    times = {1: t, 2: t + _dt.timedelta(hours=1)}
+    assert last_cleared_stage(stages, times).task_id == 1
+
+
+def test_same_time_picks_the_later_stage_on_the_route() -> None:
+    import datetime as _dt
+
+    from core.game_map import last_cleared_stage
+
+    t = _dt.datetime(2026, 10, 26, 9, 0)
+    assert last_cleared_stage([_s(1, done=True), _s(2, done=True)], {1: t, 2: t}).task_id == 2

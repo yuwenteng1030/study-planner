@@ -337,6 +337,26 @@ def load_map_done_task_ids(session: Session, user_id: int) -> set[int]:
     return done
 
 
+def load_done_times(session: Session, user_id: int) -> dict[int, _dt.datetime]:
+    """每一題最後一次做完的時間（UTC）：計畫項目的 ``done_at`` 與計畫外完成的 ``done_at`` 取較晚的。
+
+    學習地圖用它決定小熊站在哪一關（最後過關的那一關）。跨所有計畫，包含已收起來的。
+    """
+    times: dict[int, _dt.datetime] = {}
+    rows = session.execute(
+        select(PlanItem.task_id, PlanItem.done_at)
+        .join(Plan, PlanItem.plan_id == Plan.id)
+        .where(Plan.user_id == user_id, PlanItem.status == "done", PlanItem.done_at.is_not(None))
+    ).all()
+    rows += session.execute(
+        select(TaskCompletion.task_id, TaskCompletion.done_at).where(TaskCompletion.user_id == user_id)
+    ).all()
+    for task_id, when in rows:
+        if when is not None and (task_id not in times or when > times[task_id]):
+            times[task_id] = when
+    return times
+
+
 # ---------------------------------------------------------------------------
 # 寫：進度與重排
 # ---------------------------------------------------------------------------

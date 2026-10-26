@@ -153,27 +153,28 @@ def test_map_page_draws_every_task_as_a_level(seeded_app_db) -> None:
 
 
 def test_submit_button_clears_the_level_and_moves_the_bear(seeded_app_db) -> None:
-    """按「我 submit 過了」：總數多一、小熊換到下一關、上方面板換成下一題。
+    """按「我 submit 過了」：總數多一、小熊停在剛過的那一關、小卡與上方面板換成下一題。
 
     不管這一題在不在計畫裡（共用的測試資料庫可能已經有計畫），
     「寫到哪裡」由 ``test_map_completion.py`` 守，這裡確認按鈕真的接上了。
     """
     app = _full_map()
-    before_done, before_here = _map_done(app), _map_data(app)["here"]
+    before_done = _map_done(app)
     assert before_done < 124, "前提不成立：共用的測試資料庫已經做到最後一關，小熊不會再走"
     before_title = app.markdown[0].value
 
     [button] = [b for b in app.button if b.label == "我 submit 過了"]
+    cleared = int(button.key.rsplit("_", 1)[1])  # 上方面板的按鈕 key 是 done_<task_id>
     button.click().run()
     assert not app.exception, [str(e.value) for e in app.exception]
 
     assert _map_done(app) == before_done + 1
     assert app.toast, "破關後應該跳出鼓勵訊息"
     data = _map_data(app)
-    assert data["here"] != before_here
-    assert f'data-task="{before_here}"' in data["svg"]
-    # 破關後小卡直接開在下一關，並說一聲過關
-    assert data["focus"]["task"] == data["here"]
+    # 小熊站在最後過關的那一關，就是剛按完成的這一題
+    assert data["here"] == cleared
+    # 破關後小卡直接開在下一關（不是小熊那一關），並說一聲過關
+    assert data["focus"]["task"] != cleared
     assert data["focus"]["cleared"]
     assert app.markdown[0].value != before_title
 

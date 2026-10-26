@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import datetime as _dt
+
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
@@ -220,8 +222,11 @@ class PlanMarks:
 
 
 def bear_stage(stages: list[Stage], marks: PlanMarks) -> Stage | None:
-    """小熊站哪一關：今天排的題目裡，**路線上最前面**那個還沒做的；今天的都做完（或沒計畫）
-    就回到路線上第一個沒做的。
+    """下一關：今天排的題目裡，**路線上最前面**那個還沒做的；今天的都做完（或沒計畫）
+    就回到路線上第一個沒做的。地圖上方的「下一關」面板與破關後的小卡用它。
+
+    名字沿用舊的：以前小熊站在這裡，2026-10-26 起小熊改站在最後過關的那一關
+    （``last_cleared_stage``），一關都還沒過時才站在這裡。
 
     照路線順序、不照今天的排程順序：排程把同一主題的題目排在一起，地圖照「暖身 → 主力 →
     進階」編號，兩邊不一樣時小熊會在編號上跳來跳去（做完第 1 關跳到第 3 關）。今日任務頁
@@ -234,6 +239,24 @@ def bear_stage(stages: list[Stage], marks: PlanMarks) -> Stage | None:
         if stage.task_id in today and not stage.done:
             return stage
     return next_stage(stages)
+
+
+def last_cleared_stage(stages: list[Stage], done_times: dict[int, _dt.datetime]) -> Stage | None:
+    """最後過關的那一關：路線上已完成的關卡裡，完成時間最晚的那個。小熊平常站這裡。
+
+    同一個時間（理論上不會，但匯入的舊資料可能有）取路線上比較後面的。
+    已完成但查不到時間的關卡不算；一關都沒過就回 ``None``，由呼叫端決定站哪
+    （地圖頁讓小熊站在下一關，也就是起點）。
+    """
+    best: tuple[_dt.datetime, int] | None = None
+    winner: Stage | None = None
+    for i, stage in enumerate(stages):
+        when = done_times.get(stage.task_id)
+        if not stage.done or when is None:
+            continue
+        if best is None or (when, i) > best:
+            best, winner = (when, i), stage
+    return winner
 
 
 def route_positions(
